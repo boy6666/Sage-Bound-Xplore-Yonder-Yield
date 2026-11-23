@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+
+# Node
+node_modules/
+frontend/dist/
+.vite/
+coverage/
+
+# App runtime data / secrets
+data/
+*.db
+*.db-wal
+*.db-shm
+browser/
+logs/
+backups/
+
+# Local env
+.env
+.env.*
+!.env.example
+
+# Scratch scripts and throwaway experiments (never part of the app runtime)
+tmp/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
