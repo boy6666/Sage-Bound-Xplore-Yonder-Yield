@@ -44,7 +44,7 @@
 cd backend
 uv sync
 uv run pytest -q
-uv run uvicorn student_workbench.main:app --port 8765
+uv run uvicorn student_workbench.asgi:app --port 8765
 
 # 前端
 cd frontend
