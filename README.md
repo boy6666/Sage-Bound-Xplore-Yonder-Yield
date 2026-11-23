@@ -6,7 +6,11 @@
 
 ## 当前状态
 
-设计与实施文档已完成；代码按前后端分离、TDD 方式实现中。
+P0 已实现并通过测试：后端 81 项 pytest、前端 31 项 Vitest，`npm run build` 通过；
+端到端冒烟覆盖引导、项目状态与原因校验、课程映射、fake 平台同步、今日聚合与来源校验。
+
+尚未实现（按设计保留）：真实教务/学习平台适配器（`academic_portal_v1`、`chaoxing_v1` 返回
+`PLATFORM_NOT_CONFIGURED`）、GitHub 远端同步、自动同步、周报与 AI 复盘。
 
 ## 目录结构
 
