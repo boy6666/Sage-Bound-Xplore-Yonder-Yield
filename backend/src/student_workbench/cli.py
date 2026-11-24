@@ -27,6 +27,7 @@ def _session_factory():
 
     config = AppConfig.from_env()
     config.ensure_data_dir()
+    config.apply_runtime_env()
     engine = create_db_engine(config.resolved_db_url)
     Base.metadata.create_all(engine)
     ensure_schema(engine)
@@ -212,6 +213,34 @@ def _academic_logout(args: argparse.Namespace) -> int:
     return 0
 
 
+def _browser_install(args: argparse.Namespace) -> int:
+    import shutil
+    import subprocess
+    import sys
+
+    from .config import AppConfig
+
+    config = AppConfig.from_env()
+    config.ensure_data_dir()
+    target = config.apply_runtime_env()
+    print(f"浏览器安装目录: {target}")
+
+    executable = shutil.which("playwright")
+    if executable:
+        command = [executable, "install", "chromium"]
+    else:
+        command = [sys.executable, "-m", "playwright", "install", "chromium"]
+
+    result = subprocess.run(
+        command,
+        env={**os.environ, "PLAYWRIGHT_BROWSERS_PATH": str(target)},
+        check=False,
+    )
+    if result.returncode == 0:
+        print("Chromium 安装完成")
+    return result.returncode
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="workbench", description="Student Workbench")
     subparsers = parser.add_subparsers(dest="command")
@@ -243,6 +272,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     academic_sub.add_parser("logout", help="删除本地保存的登录 Cookie")
 
+    browser = subparsers.add_parser("browser", help="浏览器依赖")
+    browser_sub = browser.add_subparsers(dest="browser_action")
+    browser_sub.add_parser(
+        "install", help="把 Chromium 安装到项目 data/ms-playwright（不占 C 盘）"
+    )
+
     return parser
 
 
@@ -261,6 +296,11 @@ def main(argv: list[str] | None = None) -> int | None:
         if action == "logout":
             return _academic_logout(args)
         parser.parse_args(["academic", "--help"])
+
+    if args.command == "browser":
+        if getattr(args, "browser_action", None) == "install":
+            return _browser_install(args)
+        parser.parse_args(["browser", "--help"])
 
     _serve()
     return None

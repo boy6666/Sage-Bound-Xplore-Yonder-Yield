@@ -59,9 +59,28 @@ npm run dev
 
 前端开发服务器将 `/api` 代理到 `http://127.0.0.1:8765`。
 
+## 浏览器依赖（Playwright / Chromium）
+
+浏览器登录教务需要 Playwright 和 Chromium。两者都在项目内，**不会安装到 C 盘**：
+
+```bash
+cd backend
+uv sync                                  # 安装 playwright 包到 .venv
+python -m student_workbench.cli browser install   # 下载 Chromium 到 data/ms-playwright
+```
+
+`browser install` 会设置 `PLAYWRIGHT_BROWSERS_PATH=<仓库>/data/ms-playwright` 再下载。后端的
+`create_app()` 和 CLI 启动时也会设置同一变量，所以运行期读取的始终是项目内浏览器。
+
+仓库里不提交这 450MB 的浏览器；换机器后重新执行一次上面的命令即可。
+
 ## 导入真实教务课表
 
-教务登录带验证码，必须人工完成一次；登录后的 Cookie 会保存到本机，之后同步走纯 HTTP，不再打开浏览器。
+教务登录带验证码，必须人工完成；登录后的 Cookie 会保存到本机，之后同步走纯 HTTP，不再打开浏览器。
+
+界面上可以直接操作：同步中心 →「手动同步」用已保存的 Cookie 读取课表和调停补课；Cookie 失效时会自动打开浏览器请你登录一次，成功后立即导入。
+
+命令行同样可用：
 
 ```bash
 cd backend
@@ -89,7 +108,9 @@ Cookie 保存在应用数据目录 `cookies/academic_portal_v1.json`，不进入
 data/
 ├── workbench.db        # SQLite 主库
 ├── workbench.db-wal    # WAL 日志
-└── cookies/            # 平台登录会话
+├── cookies/            # 平台登录会话
+├── ms-playwright/      # Chromium（约 450MB，不提交）
+└── browser/            # 登录用的浏览器资料目录
 ```
 
 可用 `STUDENT_WORKBENCH_DATA_DIR` 覆盖该目录，或用 `STUDENT_WORKBENCH_DB_URL` 直接指定数据库地址。

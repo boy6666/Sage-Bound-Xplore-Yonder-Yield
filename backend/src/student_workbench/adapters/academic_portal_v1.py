@@ -22,6 +22,10 @@ class PortalError(RuntimeError):
     """Base error for portal capture failures."""
 
 
+class PortalDependencyMissing(PortalError):
+    """Playwright or its browser binary is not installed."""
+
+
 class PortalAuthRequired(PortalError):
     """The user did not finish logging in before the timeout."""
 
@@ -47,17 +51,28 @@ async def capture_schedule_html(
         from playwright.async_api import TimeoutError as PlaywrightTimeout
         from playwright.async_api import async_playwright
     except ImportError as exc:  # pragma: no cover - depends on local env
-        raise PortalError(
-            "未安装 playwright，无法使用浏览器抓取教务课表；请先安装该依赖"
+        raise PortalDependencyMissing(
+            "未安装 Playwright，无法打开浏览器登录教务系统；请在 backend 目录运行 uv sync"
         ) from exc
 
     profile_dir = Path(profile_dir)
     profile_dir.mkdir(parents=True, exist_ok=True)
 
     async with async_playwright() as playwright:
-        context = await playwright.chromium.launch_persistent_context(
-            str(profile_dir), headless=headless, no_viewport=True
-        )
+        try:
+            context = await playwright.chromium.launch_persistent_context(
+                str(profile_dir),
+                headless=headless,
+                no_viewport=True,
+                # Use the full Chromium build we ship under data/ms-playwright,
+                # so a separate headless-shell download is not required.
+                channel="chromium",
+            )
+        except Exception as exc:  # noqa: BLE001 - missing browser binary
+            raise PortalDependencyMissing(
+                "未找到可用的 Chromium。请在 backend 目录运行 "
+                "python -m student_workbench.cli browser install"
+            ) from exc
         try:
             page = context.pages[0] if context.pages else await context.new_page()
             await page.goto(login_url, wait_until="load", timeout=60_000)

@@ -10,11 +10,17 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime
 
+import httpx
 from sqlalchemy.orm import Session
 
-from ..adapters.academic_http import fetch_adjustments_html, fetch_schedule_html
+from ..adapters.academic_http import (
+    ScheduleStructureChanged,
+    fetch_adjustments_html,
+    fetch_schedule_html,
+)
 from ..adapters.academic_portal_v1 import (
     PortalAuthRequired,
+    PortalDependencyMissing,
     PortalError,
     PortalStructureChanged,
     capture_schedule_html,
@@ -83,7 +89,23 @@ def sync_from_cookie(
     """Read the timetable and the adjustment page with the stored cookie."""
     stored, jar = _cookie_jar(config)
 
-    schedule_html = fetch_schedule_html(jar)
+    try:
+        schedule_html = fetch_schedule_html(jar)
+    except ScheduleStructureChanged as exc:
+        raise AppError(
+            "PLATFORM_STRUCTURE_CHANGED",
+            str(exc),
+            409,
+            {"provider": PROVIDER},
+        ) from exc
+    except httpx.HTTPError as exc:
+        raise AppError(
+            "PLATFORM_NETWORK_ERROR",
+            "访问教务系统失败，请检查网络或代理设置",
+            409,
+            {"provider": PROVIDER},
+        ) from exc
+
     if not schedule_html:
         raise _auth_required("教务登录已失效，需要重新登录")
 
@@ -130,6 +152,10 @@ def login_with_browser(
         )
     except PortalAuthRequired as exc:
         raise _auth_required(str(exc)) from exc
+    except PortalDependencyMissing as exc:
+        raise AppError(
+            "PLATFORM_DEPENDENCY_MISSING", str(exc), 409, {"provider": PROVIDER}
+        ) from exc
     except PortalStructureChanged as exc:
         raise AppError(
             "PLATFORM_STRUCTURE_CHANGED", str(exc), 409, {"provider": PROVIDER}

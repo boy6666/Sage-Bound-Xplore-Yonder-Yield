@@ -9,6 +9,7 @@ import platformdirs
 DATA_DIR_ENV = "STUDENT_WORKBENCH_DATA_DIR"
 DB_URL_ENV = "STUDENT_WORKBENCH_DB_URL"
 TIMEZONE_ENV = "STUDENT_WORKBENCH_TIMEZONE"
+BROWSERS_DIR_NAME = "ms-playwright"
 
 
 def _project_root() -> Path | None:
@@ -49,6 +50,17 @@ class AppConfig:
     def ensure_data_dir(self) -> Path:
         self.data_dir.mkdir(parents=True, exist_ok=True)
         return self.data_dir
+
+    @property
+    def browsers_dir(self) -> Path:
+        return self.data_dir / BROWSERS_DIR_NAME
+
+    def apply_runtime_env(self) -> Path:
+        """Keep Playwright browsers inside the project instead of the C: cache."""
+        target = self.browsers_dir
+        target.mkdir(parents=True, exist_ok=True)
+        os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", str(target))
+        return target
 
     @classmethod
     def from_env(cls) -> AppConfig:

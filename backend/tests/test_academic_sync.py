@@ -150,3 +150,43 @@ def test_unknown_provider_still_rejected():
     with pytest.raises(AppError) as excinfo:
         ensure_configured("chaoxing_v1")
     assert excinfo.value.code == "PLATFORM_NOT_CONFIGURED"
+
+
+def test_missing_browser_dependency_has_its_own_code(
+    app, session_factory, connection, monkeypatch
+):
+    from student_workbench.adapters.academic_portal_v1 import PortalDependencyMissing
+
+    async def fake_capture(*args, **kwargs):
+        raise PortalDependencyMissing("未安装 Playwright")
+
+    monkeypatch.setattr(academic_sync, "capture_schedule_html", fake_capture)
+
+    with session_factory() as session:
+        row = session.get(Connection, connection)
+        with pytest.raises(AppError) as excinfo:
+            academic_sync.login_with_browser(session, row, app.state.config)
+
+    assert excinfo.value.code == "PLATFORM_DEPENDENCY_MISSING"
+    assert "Playwright" in excinfo.value.message
+
+
+def test_network_failure_has_its_own_code(
+    app, session_factory, connection, monkeypatch
+):
+    import httpx
+
+    _stub_cookie(monkeypatch)
+
+    def boom(jar):
+        raise httpx.ConnectError("connection refused")
+
+    monkeypatch.setattr(academic_sync, "fetch_schedule_html", boom)
+
+    with session_factory() as session:
+        row = session.get(Connection, connection)
+        run = start_sync(session, row, app.state.config)
+        session.commit()
+
+    assert run.status == "failed"
+    assert run.error_code == "PLATFORM_NETWORK_ERROR"

@@ -258,7 +258,7 @@ def start_sync(session: Session, connection: Connection, config) -> SyncRun:
         connection.last_error = exc.message
     except Exception as exc:  # pragma: no cover - defensive
         run.status = "failed"
-        run.error_code = "PLATFORM_STRUCTURE_CHANGED"
+        run.error_code = "PLATFORM_SYNC_FAILED"
         run.error_message = str(exc)[:500]
         connection.status = "error"
         connection.last_error = run.error_message

@@ -22,6 +22,7 @@ from .services.settings import get_settings_row
 def create_app(config: AppConfig | None = None) -> FastAPI:
     config = config or AppConfig.from_env()
     config.ensure_data_dir()
+    config.apply_runtime_env()
 
     engine = create_db_engine(config.resolved_db_url)
     Base.metadata.create_all(engine)
