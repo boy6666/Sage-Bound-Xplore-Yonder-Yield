@@ -1,0 +1,1 @@
+"""Platform adapters (browser/HTML capture and pure parsers)."""

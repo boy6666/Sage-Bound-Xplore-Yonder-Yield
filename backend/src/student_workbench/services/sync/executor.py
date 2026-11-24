@@ -20,6 +20,13 @@ ACTIVE_RUN_STATUSES = ("running",)
 
 def ensure_configured(provider: str) -> None:
     if provider in REAL_PROVIDERS:
+        if provider == "academic_portal_v1":
+            raise AppError(
+                "PLATFORM_NOT_CONFIGURED",
+                "教务平台登录需要人工输入验证码，请在命令行运行 workbench academic sync 导入课表",
+                409,
+                {"provider": provider},
+            )
         raise AppError(
             "PLATFORM_NOT_CONFIGURED",
             "该平台适配器尚未配置",

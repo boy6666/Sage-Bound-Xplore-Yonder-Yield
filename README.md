@@ -58,3 +58,18 @@ npm run dev
 ```
 
 前端开发服务器将 `/api` 代理到 `http://127.0.0.1:8765`。
+
+## 导入真实教务课表
+
+教务系统登录带验证码，且会话 Cookie 在关闭浏览器后失效，因此登录必须在可见浏览器里完成一次：
+
+```bash
+cd backend
+PYTHONPATH=src python -m student_workbench.cli academic sync --save-html ../tmp/imported-kb.html
+```
+
+命令会打开浏览器，登录成功后自动打开课程表页、解析并写入数据库，输出“课程 / 身份 / 课程表条目”数量。重复执行同一学期是幂等的：条目按 external_id 更新，页面中已消失的条目会被移除。
+
+解析的是课表网格（`?c=Default&a=Kb`）：表头用 `colspan` 表达周二、周四各占两列，课程格用 `<br>` 分隔“课程名 / 教师 / 教室 / 周次”，单双周与跨节次（`rowspan`）都会被展开。
+
+界面里的“同步”按钮暂不支持教务平台，会提示改用上面的命令；学习平台仍走 `learning_fake` 流程。
