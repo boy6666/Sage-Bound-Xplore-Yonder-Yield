@@ -61,14 +61,24 @@ npm run dev
 
 ## 导入真实教务课表
 
-教务系统登录带验证码，且会话 Cookie 在关闭浏览器后失效，因此登录必须在可见浏览器里完成一次：
+教务登录带验证码，必须人工完成一次；登录后的 Cookie 会保存到本机，之后同步走纯 HTTP，不再打开浏览器。
 
 ```bash
 cd backend
-PYTHONPATH=src python -m student_workbench.cli academic sync --save-html ../tmp/imported-kb.html
+
+# 只有第一次（或会话过期后）需要：登录一次并保存 Cookie
+PYTHONPATH=src python -m student_workbench.cli academic login
+
+# 日常同步：不打开浏览器，用已保存的 Cookie 直接抓课表
+PYTHONPATH=src python -m student_workbench.cli academic sync
+
+# 需要作废本机保存的登录状态时
+PYTHONPATH=src python -m student_workbench.cli academic logout
 ```
 
-命令会打开浏览器，登录成功后自动打开课程表页、解析并写入数据库，输出“课程 / 身份 / 课程表条目”数量。重复执行同一学期是幂等的：条目按 external_id 更新，页面中已消失的条目会被移除。
+`academic sync` 在会话失效时会明确提示重新执行 `academic login`，不会静默失败。同一学期重复执行是幂等的：条目按 external_id 更新，页面中已消失的条目会被移除。
+
+Cookie 保存在应用数据目录 `cookies/academic_portal_v1.json`，不进入仓库、不写日志。
 
 解析的是课表网格（`?c=Default&a=Kb`）：表头用 `colspan` 表达周二、周四各占两列，课程格用 `<br>` 分隔“课程名 / 教师 / 教室 / 周次”，单双周与跨节次（`rowspan`）都会被展开。
 

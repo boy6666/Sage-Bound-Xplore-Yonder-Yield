@@ -41,8 +41,8 @@ async def capture_schedule_html(
     kb_url: str = DEFAULT_KB_URL,
     timeout_seconds: int = 600,
     headless: bool = False,
-) -> str:
-    """Open the portal, wait for a manual login, then return the schedule page HTML."""
+) -> tuple[str, list[dict]]:
+    """Open the portal, wait for a manual login, then return the schedule HTML and cookies."""
     try:
         from playwright.async_api import TimeoutError as PlaywrightTimeout
         from playwright.async_api import async_playwright
@@ -82,6 +82,8 @@ async def capture_schedule_html(
                 ) from exc
 
             await page.wait_for_timeout(1500)
-            return await page.content()
+            html = await page.content()
+            cookies = await context.cookies()
+            return html, cookies
         finally:
             await context.close()

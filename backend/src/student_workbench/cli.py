@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import os
+from datetime import datetime
 from pathlib import Path
 
 
@@ -16,22 +17,22 @@ def _serve() -> None:
     uvicorn.run(create_app(), host=host, port=port)
 
 
-def _academic_sync(args: argparse.Namespace) -> int:
+def _session_factory():
     from sqlalchemy import select
 
     from . import models  # noqa: F401  (registers ORM metadata)
-    from .adapters.academic_portal_v1 import capture_schedule_html, default_profile_dir
-    from .adapters.kb_parser import parse_kb_html
     from .config import AppConfig
     from .db import Base, create_db_engine, create_session_factory
-    from .models import Connection
-    from .services.academic_import import import_schedule
 
     config = AppConfig.from_env()
     config.ensure_data_dir()
     engine = create_db_engine(config.resolved_db_url)
     Base.metadata.create_all(engine)
-    factory = create_session_factory(engine)
+    return config, create_session_factory(engine), select
+
+
+def _academic_connection(factory, select, args) -> str | None:
+    from .models import Connection
 
     with factory() as session:
         connection = None
@@ -39,7 +40,7 @@ def _academic_sync(args: argparse.Namespace) -> int:
             connection = session.get(Connection, args.connection_id)
             if connection is None:
                 print(f"连接不存在: {args.connection_id}")
-                return 2
+                return None
         else:
             connection = session.scalar(
                 select(Connection)
@@ -58,26 +59,16 @@ def _academic_sync(args: argparse.Namespace) -> int:
             session.flush()
         connection_id = connection.id
         session.commit()
+    return connection_id
 
-    profile_dir = Path(args.profile) if args.profile else default_profile_dir(config.data_dir)
-    print("即将打开浏览器窗口，请完成登录（账号、密码、验证码）。")
-    print(f"浏览器资料目录: {profile_dir}")
-    print(f"最长等待 {args.timeout} 秒，登录成功后会自动打开课程表并保存。")
 
-    try:
-        html = asyncio.run(
-            capture_schedule_html(
-                profile_dir,
-                timeout_seconds=args.timeout,
-                headless=args.headless,
-            )
-        )
-    except Exception as exc:  # noqa: BLE001 - surfaced to the user as text
-        print(f"抓取失败: {exc}")
-        return 1
+def _import_html(factory, connection_id: str, html: str, save_html: str | None) -> int:
+    from .adapters.kb_parser import parse_kb_html
+    from .models import Connection
+    from .services.academic_import import import_schedule
 
-    if args.save_html:
-        saved = Path(args.save_html)
+    if save_html:
+        saved = Path(save_html)
         saved.parent.mkdir(parents=True, exist_ok=True)
         saved.write_text(html, encoding="utf-8")
         print(f"已保存页面: {saved}")
@@ -95,7 +86,79 @@ def _academic_sync(args: argparse.Namespace) -> int:
         f"身份 {result['created_identities']} 个，"
         f"课程表 {result['entries']} 条（移除 {result['removed_entries']}）"
     )
-    print(f"数据库: {config.resolved_db_url}")
+    return 0
+
+
+def _academic_login(args: argparse.Namespace) -> int:
+    from .adapters.academic_portal_v1 import capture_schedule_html, default_profile_dir
+    from .adapters.portal_session import save_cookies
+
+    config, factory, select = _session_factory()
+    connection_id = _academic_connection(factory, select, args)
+    if connection_id is None:
+        return 2
+
+    profile_dir = Path(args.profile) if args.profile else default_profile_dir(config.data_dir)
+    print("即将打开浏览器窗口，请完成登录（账号、密码、验证码）。")
+    print(f"浏览器资料目录: {profile_dir}")
+    print(f"最长等待 {args.timeout} 秒。登录成功后会自动抓取课表并保存登录 Cookie。")
+
+    try:
+        html, cookies = asyncio.run(
+            capture_schedule_html(
+                profile_dir,
+                timeout_seconds=args.timeout,
+                headless=args.headless,
+            )
+        )
+    except Exception as exc:  # noqa: BLE001 - surfaced as text
+        print(f"登录/抓取失败: {exc}")
+        return 1
+
+    saved_at = datetime.now().astimezone().isoformat(timespec="seconds")
+    cookie_file = save_cookies(config.data_dir, cookies, saved_at)
+    print(f"已保存登录 Cookie: {cookie_file}（仅本机，添加在 .gitignore 的 data/ 下）")
+
+    return _import_html(factory, connection_id, html, args.save_html)
+
+
+def _academic_sync(args: argparse.Namespace) -> int:
+    from .adapters.academic_http import fetch_schedule_html
+    from .adapters.portal_session import load_cookies, to_httpx_cookies
+
+    config, factory, select = _session_factory()
+    connection_id = _academic_connection(factory, select, args)
+    if connection_id is None:
+        return 2
+
+    stored = load_cookies(config.data_dir)
+    if stored is None:
+        print("没有可用的登录会话，请先运行一次：workbench academic login")
+        return 1
+
+    print(f"使用本地保存的 Cookie（{stored.saved_at}）直接请求课表页…")
+    try:
+        html = fetch_schedule_html(to_httpx_cookies(stored.cookies))
+    except Exception as exc:  # noqa: BLE001
+        print(f"请求失败: {exc}")
+        return 1
+
+    if not html:
+        print("登录会话已失效，请重新运行一次：workbench academic login")
+        return 1
+
+    return _import_html(factory, connection_id, html, args.save_html)
+
+
+def _academic_logout(args: argparse.Namespace) -> int:
+    from .adapters.portal_session import clear_cookies, cookie_path
+
+    config, _factory, _select = _session_factory()
+    removed = clear_cookies(config.data_dir)
+    if removed:
+        print("已删除本地 Cookie")
+    else:
+        print(f"没有找到 Cookie 文件: {cookie_path(config.data_dir)}")
     return 0
 
 
@@ -107,13 +170,21 @@ def build_parser() -> argparse.ArgumentParser:
 
     academic = subparsers.add_parser("academic", help="教务平台相关操作")
     academic_sub = academic.add_subparsers(dest="action")
-    sync = academic_sub.add_parser("sync", help="登录教务并导入课程表")
+
+    login = academic_sub.add_parser("login", help="打开浏览器登录一次，保存会话 Cookie 并导入课表")
+    login.add_argument("--connection-id", default=None)
+    login.add_argument("--display-name", default="教务系统")
+    login.add_argument("--profile", default=None, help="浏览器资料目录")
+    login.add_argument("--save-html", default=None, help="把抓到的课表页面另存为文件")
+    login.add_argument("--timeout", type=int, default=600, help="等待登录的秒数")
+    login.add_argument("--headless", action="store_true", help="无头模式（无法手动登录）")
+
+    sync = academic_sub.add_parser("sync", help="用已保存的 Cookie 直接抓取课表（不打开浏览器）")
     sync.add_argument("--connection-id", default=None)
     sync.add_argument("--display-name", default="教务系统")
-    sync.add_argument("--profile", default=None, help="浏览器资料目录")
-    sync.add_argument("--save-html", default=None, help="把抓到的课表页面另存为文件")
-    sync.add_argument("--timeout", type=int, default=600, help="等待登录的秒数")
-    sync.add_argument("--headless", action="store_true", help="无头模式（无法手动登录）")
+    sync.add_argument("--save-html", default=None)
+
+    academic_sub.add_parser("logout", help="删除本地保存的登录 Cookie")
 
     return parser
 
@@ -122,8 +193,15 @@ def main(argv: list[str] | None = None) -> int | None:
     parser = build_parser()
     args = parser.parse_args(argv)
 
-    if args.command == "academic" and getattr(args, "action", None) == "sync":
-        return _academic_sync(args)
+    if args.command == "academic":
+        action = getattr(args, "action", None)
+        if action == "login":
+            return _academic_login(args)
+        if action == "sync":
+            return _academic_sync(args)
+        if action == "logout":
+            return _academic_logout(args)
+        parser.parse_args(["academic", "--help"])
 
     _serve()
     return None
