@@ -14,6 +14,7 @@ from .errors import (
     http_error_handler,
     validation_error_handler,
 )
+from .migrations import ensure_schema
 from .security import origin_guard
 from .services.settings import get_settings_row
 
@@ -24,6 +25,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
 
     engine = create_db_engine(config.resolved_db_url)
     Base.metadata.create_all(engine)
+    ensure_schema(engine)
     session_factory = create_session_factory(engine)
     with session_factory() as session:
         get_settings_row(session)

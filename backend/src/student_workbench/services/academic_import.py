@@ -152,6 +152,8 @@ def import_schedule(
             entry.weekday = occurrence.weekday
             entry.start_time = occurrence.start_time
             entry.end_time = occurrence.end_time
+            entry.period_start = occurrence.period_start
+            entry.period_end = occurrence.period_end
             entry.location = occurrence.location
             entry.weeks = list(occurrence.weeks)
             entry.weeks_label = occurrence.weeks_label

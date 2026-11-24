@@ -52,6 +52,8 @@ def _seed(session, day: date, weeks: list[int], course_name: str = "操作系统
             weekday=weekday,
             start_time="08:00",
             end_time="09:40",
+            period_start=1,
+            period_end=2,
             location="主5#418",
             weeks=weeks,
             weeks_label="1-16周(每周)",
@@ -59,11 +61,38 @@ def _seed(session, day: date, weeks: list[int], course_name: str = "操作系统
     )
     session.add(PeriodTime(term=TERM, period=1, start_time="08:00", end_time="08:45"))
     session.add(PeriodTime(term=TERM, period=2, start_time="08:55", end_time="09:40"))
+    session.add(PeriodTime(term=TERM, period=3, start_time="10:00", end_time="10:45"))
+    session.add(PeriodTime(term=TERM, period=4, start_time="10:55", end_time="11:40"))
 
     settings = get_settings_row(session)
     settings.term_start_date = TERM_START
     session.flush()
     return connection, course
+
+
+def _add_slot(session, connection, course, day: date, weeks: list[int]) -> None:
+    """Add a second slot on the same weekday, periods 3-4 (10:00-11:40)."""
+    identity = session.scalar(
+        select(CourseIdentity).where(CourseIdentity.course_id == course.id)
+    )
+    weekday = day.isoweekday()
+    session.add(
+        CourseScheduleEntry(
+            connection_id=connection.id,
+            identity_id=identity.id,
+            course_id=course.id,
+            external_id=f"{course.name}|{weekday}|10:00-11:40",
+            weekday=weekday,
+            start_time="10:00",
+            end_time="11:40",
+            period_start=3,
+            period_end=4,
+            location="主5#418",
+            weeks=weeks,
+            weeks_label="1-16周(每周)",
+        )
+    )
+    session.flush()
 
 
 def _week_of(day: date) -> int:
@@ -173,6 +202,57 @@ def test_adjustment_for_other_day_is_ignored(session_factory):
 
     assert result[0]["status"] == "normal"
     assert result[0]["adjustment_note"] is None
+
+
+def test_cancel_matches_only_the_adjusted_periods(session_factory):
+    """Same course twice on one day: cancelling 3-4 must leave 1-2 untouched."""
+    day = TERM_START + timedelta(weeks=11)
+    with session_factory() as session:
+        connection, course = _seed(session, day, [_week_of(day)])
+        _add_slot(session, connection, course, day, [_week_of(day)])
+        session.add(
+            ScheduleAdjustment(
+                connection_id=connection.id,
+                external_id="a5",
+                kind="cancel",
+                term=TERM,
+                course_name="操作系统",
+                course_class="操作系统(24软件)(1班)",
+                week=_week_of(day),
+                weekday=day.isoweekday(),
+                period_label="3-4",
+                period_start=3,
+                period_end=4,
+                adjusted_on=day,
+            )
+        )
+        result, _ = classes_today(session, day, get_settings_row(session))
+
+    statuses = {item["start_time"]: item["status"] for item in result}
+    assert statuses == {"08:00": "normal", "10:00": "cancelled"}
+
+
+def test_cancel_without_period_falls_back_to_course_match(session_factory):
+    """Legacy adjustment rows carry no period; they still mark the class."""
+    day = TERM_START + timedelta(weeks=11)
+    with session_factory() as session:
+        connection, _course = _seed(session, day, [_week_of(day)])
+        session.add(
+            ScheduleAdjustment(
+                connection_id=connection.id,
+                external_id="a6",
+                kind="cancel",
+                term=TERM,
+                course_name="操作系统",
+                course_class="操作系统(24软件)(1班)",
+                week=_week_of(day),
+                weekday=day.isoweekday(),
+                adjusted_on=day,
+            )
+        )
+        result, _ = classes_today(session, day, get_settings_row(session))
+
+    assert result[0]["status"] == "cancelled"
 
 
 def test_import_adjustments_is_idempotent(session_factory):

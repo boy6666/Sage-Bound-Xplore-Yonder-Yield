@@ -141,6 +141,8 @@ class CourseScheduleEntry(Base):
     weekday: Mapped[int] = mapped_column(Integer, nullable=False)
     start_time: Mapped[str] = mapped_column(String(5), nullable=False)
     end_time: Mapped[str] = mapped_column(String(5), nullable=False)
+    period_start: Mapped[int | None] = mapped_column(Integer)
+    period_end: Mapped[int | None] = mapped_column(Integer)
     location: Mapped[str | None] = mapped_column(String(200))
     weeks: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
     weeks_label: Mapped[str] = mapped_column(String(64), default="", nullable=False)

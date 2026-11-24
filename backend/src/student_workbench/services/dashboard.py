@@ -98,13 +98,31 @@ def _adjustment_note(
     )
 
 
+def _periods_overlap(entry, adjustment) -> bool:
+    """True when the adjustment covers at least one period of the entry.
+
+    Falls back to a name-only match when either side has no period numbers, so
+    legacy rows imported before periods were stored still resolve.
+    """
+    if adjustment.period_start is None or entry.period_start is None:
+        return True
+    entry_end = entry.period_end or entry.period_start
+    adjustment_end = adjustment.period_end or adjustment.period_start
+    return adjustment.period_start <= entry_end and entry.period_start <= adjustment_end
+
+
 def _match_adjustment(
-    course_name: str, adjustments: list, period_times: dict[int, tuple[str, str]]
+    course_name: str,
+    entry,
+    adjustments: list,
+    period_times: dict[int, tuple[str, str]],
 ) -> tuple[str, str | None]:
     for adjustment in adjustments:
         if adjustment.kind == "makeup":
             continue
         if normalize_name(adjustment.course_name) != normalize_name(course_name):
+            continue
+        if not _periods_overlap(entry, adjustment):
             continue
         state = "cancelled" if adjustment.kind == "cancel" else "moved"
         return state, _adjustment_note(adjustment, period_times)
@@ -149,7 +167,9 @@ def classes_today(
         course = session.get(Course, entry.course_id)
         if course is None:
             continue
-        status, note = _match_adjustment(course.name, day_adjustments, period_times)
+        status, note = _match_adjustment(
+            course.name, entry, day_adjustments, period_times
+        )
         result.append(
             {
                 "course_id": course.id,

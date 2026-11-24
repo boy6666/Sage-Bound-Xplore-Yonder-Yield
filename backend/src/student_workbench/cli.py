@@ -23,11 +23,14 @@ def _session_factory():
     from . import models  # noqa: F401  (registers ORM metadata)
     from .config import AppConfig
     from .db import Base, create_db_engine, create_session_factory
+    from .migrations import ensure_schema
 
     config = AppConfig.from_env()
     config.ensure_data_dir()
     engine = create_db_engine(config.resolved_db_url)
     Base.metadata.create_all(engine)
+    ensure_schema(engine)
+    print(f"数据库: {config.resolved_db_url}")
     return config, create_session_factory(engine), select
 
 

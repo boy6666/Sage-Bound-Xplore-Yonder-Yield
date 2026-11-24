@@ -83,6 +83,21 @@ PYTHONPATH=src python -m student_workbench.cli academic logout
 
 Cookie 保存在应用数据目录 `cookies/academic_portal_v1.json`，不进入仓库、不写日志。
 
+运行期数据统一放在仓库下的 `data/`（已被 `.gitignore` 忽略）：
+
+```text
+data/
+├── workbench.db        # SQLite 主库
+├── workbench.db-wal    # WAL 日志
+└── cookies/            # 平台登录会话
+```
+
+可用 `STUDENT_WORKBENCH_DATA_DIR` 覆盖该目录，或用 `STUDENT_WORKBENCH_DB_URL` 直接指定数据库地址。
+用 Navicat 查看时选 SQLite 连接，数据库文件指向 `data/workbench.db`，用户名密码留空。
+
+表结构升级由 `student_workbench/migrations.py` 在启动时执行：`create_all` 只补缺失的表，
+新增列通过幂等的 `ALTER TABLE ADD COLUMN` 补上，重复执行无副作用。
+
 解析的是课表网格（`?c=Default&a=Kb`）：表头用 `colspan` 表达周二、周四各占两列，课程格用 `<br>` 分隔“课程名 / 教师 / 教室 / 周次”，单双周与跨节次（`rowspan`）都会被展开。
 
 调停补课页（`?c=Default&a=tbk`）有“调停课”和“补课”两张表，空表显示“当前没有记录”。导入后今日页会叠加显示：
@@ -91,6 +106,8 @@ Cookie 保存在应用数据目录 `cookies/academic_portal_v1.json`，不进入
 - 被调课的课程标为 `已调课`；
 - 当天补课的课程会作为额外条目出现，时间由课表页的节次时间换算。
 
-匹配规则是“课程名 + 周次 + 星期”，同一天同一门课有多节时会被一并标记；这是当前已知的精度限制。
+匹配规则是“课程名 + 周次 + 星期 + 节次区间”。课表行现在保存 `period_start/period_end`，
+调课记录同样带节次，两者区间有交集才判定为停课/调课；因此同一天同一门课有两节、只停其中一节时，
+只有那一节会被标记。缺失节次的旧记录仍按课程名匹配，不会因升级而失效。
 
 界面里的“同步”按钮暂不支持教务平台，会提示改用上面的命令；学习平台仍走 `learning_fake` 流程。
