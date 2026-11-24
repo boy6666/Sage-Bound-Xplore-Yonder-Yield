@@ -42,7 +42,7 @@ def test_login_then_sync_is_idempotent(client):
     run_id = first.json()["sync_run_id"]
     run = client.get(f"/api/v1/sync-runs/{run_id}").json()
     assert run["status"] == "succeeded"
-    assert run["counts"] == {"courses": 2, "items": 4, "schedule": 0}
+    assert run["counts"] == {"courses": 2, "items": 4, "schedule": 0, "adjustments": 0}
     assert run["connection_name"] == "学习通（示例）"
     assert run["kind"] == "learning"
 
@@ -53,7 +53,7 @@ def test_login_then_sync_is_idempotent(client):
     assert second.status_code == 202
     assert second.json()["sync_run_id"] != run_id
     second_run = client.get(f"/api/v1/sync-runs/{second.json()['sync_run_id']}").json()
-    assert second_run["counts"] == {"courses": 2, "items": 4, "schedule": 0}
+    assert second_run["counts"] == {"courses": 2, "items": 4, "schedule": 0, "adjustments": 0}
     assert len(client.get("/api/v1/work-items").json()["items"]) == 4
 
     runs = client.get("/api/v1/sync-runs", params={"limit": 20}).json()["items"]
@@ -76,7 +76,7 @@ def test_academic_fake_sync_counts(client):
         "sync_run_id"
     ]
     run = client.get(f"/api/v1/sync-runs/{run_id}").json()
-    assert run["counts"] == {"courses": 2, "items": 0, "schedule": 2}
+    assert run["counts"] == {"courses": 2, "items": 0, "schedule": 2, "adjustments": 0}
     assert client.get("/api/v1/work-items").json()["items"] == []
 
 

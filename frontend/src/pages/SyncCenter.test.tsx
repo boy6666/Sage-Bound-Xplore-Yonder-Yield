@@ -108,4 +108,76 @@ describe('SyncCenter 登录与验证码挑战', () => {
     expect(await screen.findByText('还没有平台连接')).toBeInTheDocument()
     expect(screen.getAllByRole('button', { name: '新建连接' }).length).toBeGreaterThan(0)
   })
+
+  it('Cookie 失效时同步失败会自动打开浏览器登录', async () => {
+    const academic: Connection = {
+      ...connection,
+      id: 'ac1',
+      kind: 'academic',
+      provider: 'academic_portal_v1',
+      display_name: '教务系统',
+      account_label: null,
+    }
+
+    const fetchMock = stubFetch([
+      (url, _init, method) => {
+        if (method === 'GET' && url.endsWith('/api/v1/connections')) {
+          return { body: { items: [academic] } }
+        }
+        if (method === 'POST' && url.endsWith('/api/v1/connections/ac1/sync')) {
+          return { status: 202, body: { sync_run_id: 'run-1' } }
+        }
+        if (method === 'GET' && url.endsWith('/api/v1/sync-runs/run-1')) {
+          return {
+            body: {
+              id: 'run-1',
+              connection_id: 'ac1',
+              connection_name: '教务系统',
+              kind: 'academic',
+              status: 'failed',
+              started_at: '2026-11-24T10:00:00+08:00',
+              finished_at: '2026-11-24T10:00:05+08:00',
+              counts: { courses: 0, items: 0, schedule: 0 },
+              error_code: 'PLATFORM_AUTH_REQUIRED',
+              error_message: '教务登录已失效，需要重新登录',
+            },
+          }
+        }
+        if (method === 'GET' && url.includes('/api/v1/sync-runs')) {
+          return { body: { items: [] } }
+        }
+        if (
+          method === 'POST' &&
+          url.endsWith('/api/v1/connections/ac1/browser-login')
+        ) {
+          return {
+            body: {
+              status: 'ready',
+              counts: { courses: 11, items: 0, schedule: 18, adjustments: 0 },
+            },
+          }
+        }
+        return null
+      },
+    ])
+
+    const user = userEvent.setup()
+    renderPage(<SyncCenter />, { route: '/sync' })
+
+    await screen.findByText('教务系统')
+    await user.click(screen.getByRole('button', { name: '手动同步' }))
+
+    await waitFor(() => {
+      const call = fetchMock.mock.calls.find(
+        ([url, init]) =>
+          String(url).endsWith('/api/v1/connections/ac1/browser-login') &&
+          (init as RequestInit | undefined)?.method === 'POST',
+      )
+      expect(call).toBeTruthy()
+    })
+
+    expect(
+      await screen.findByText(/登录成功：课程 11 门、课程表 18 条/),
+    ).toBeInTheDocument()
+  })
 })

@@ -374,6 +374,11 @@ class SyncStartOut(BaseModel):
     sync_run_id: str
 
 
+class BrowserLoginOut(BaseModel):
+    status: str
+    counts: dict[str, int]
+
+
 class SettingsOut(BaseModel):
     setup_completed: bool
     timezone: str

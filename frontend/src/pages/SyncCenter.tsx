@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { ApiError } from '../api/client'
 import type {
@@ -9,6 +9,7 @@ import type {
   SyncRun,
 } from '../api/types'
 import {
+  useBrowserLogin,
   useConnectionChallenge,
   useConnectionLogin,
   useConnections,
@@ -272,6 +273,7 @@ export function SyncCenter() {
   const createConnection = useCreateConnection()
   const deleteConnection = useDeleteConnection()
   const syncConnection = useSyncConnection()
+  const browserLogin = useBrowserLogin()
   const queryClient = useQueryClient()
 
   const [loginTarget, setLoginTarget] = useState<Connection | null>(null)
@@ -280,6 +282,7 @@ export function SyncCenter() {
   const [syncMessage, setSyncMessage] = useState<string | null>(null)
   const [syncError, setSyncError] = useState<unknown>(null)
   const [historyKind, setHistoryKind] = useState<'' | ConnectionKind>('')
+  const autoLoginRunRef = useRef<string | null>(null)
 
   const [kind, setKind] = useState<ConnectionKind>('learning')
   const [provider, setProvider] = useState<Provider>('learning_fake')
@@ -299,6 +302,28 @@ export function SyncCenter() {
     void queryClient.invalidateQueries({ queryKey: ['today'] })
   }, [activeStatus, queryClient])
 
+  const handleBrowserLogin = useCallback(
+    (connection: Connection): void => {
+      setSyncError(null)
+      setSyncMessage(
+        '登录已失效，正在打开浏览器。请在窗口中完成教务登录（含验证码），成功后会自动导入课表。',
+      )
+      browserLogin.mutate(connection.id, {
+        onSuccess: (data) => {
+          const counts = data.counts
+          setSyncMessage(
+            `登录成功：课程 ${counts.courses ?? 0} 门、课程表 ${counts.schedule ?? 0} 条、调停补课 ${counts.adjustments ?? 0} 条。`,
+          )
+        },
+        onError: (error) => {
+          setSyncMessage(null)
+          setSyncError(error)
+        },
+      })
+    },
+    [browserLogin],
+  )
+
   const handleSync = (connection: Connection): void => {
     setSyncError(null)
     setSyncMessage(null)
@@ -316,10 +341,33 @@ export function SyncCenter() {
             return
           }
         }
+        if (
+          error instanceof ApiError &&
+          error.code === 'PLATFORM_AUTH_REQUIRED' &&
+          connection.provider === 'academic_portal_v1'
+        ) {
+          handleBrowserLogin(connection)
+          return
+        }
         setSyncError(error)
       },
     })
   }
+
+  const connections = connectionsQuery.data?.items ?? []
+
+  // Cookie 失效时同步会以 failed + PLATFORM_AUTH_REQUIRED 结束；自动打开一次浏览器登录。
+  useEffect(() => {
+    const run = activeRun.data
+    if (!run || run.status === 'running') return
+    if (run.error_code !== 'PLATFORM_AUTH_REQUIRED') return
+    if (autoLoginRunRef.current === run.id) return
+    autoLoginRunRef.current = run.id
+    const target = connections.find((item) => item.id === run.connection_id)
+    if (target && target.provider === 'academic_portal_v1') {
+      handleBrowserLogin(target)
+    }
+  }, [activeRun.data, connections, handleBrowserLogin])
 
   const handleDelete = (connection: Connection): void => {
     if (window.confirm(`确定删除连接「${connection.display_name}」吗？`)) {
@@ -417,9 +465,15 @@ export function SyncCenter() {
               key={connection.id}
               connection={connection}
               syncing={
-                syncConnection.isPending && syncConnection.variables === connection.id
+                (syncConnection.isPending &&
+                  syncConnection.variables === connection.id) ||
+                (browserLogin.isPending &&
+                  browserLogin.variables === connection.id)
               }
-              onLogin={setLoginTarget}
+              onLogin={(item) => {
+                if (item.provider === 'academic_portal_v1') handleBrowserLogin(item)
+                else setLoginTarget(item)
+              }}
               onSync={handleSync}
               onDelete={handleDelete}
             />

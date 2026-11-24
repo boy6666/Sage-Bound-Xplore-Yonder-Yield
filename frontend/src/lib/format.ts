@@ -245,10 +245,16 @@ export function errorCode(error: unknown): string | null {
   return error instanceof ApiError ? error.code : null
 }
 
-export function syncCountsText(counts: { courses: number; items: number; schedule: number }): string {
+export function syncCountsText(counts: {
+  courses: number
+  items: number
+  schedule: number
+  adjustments?: number
+}): string {
   const parts: string[] = []
   parts.push(`课程 ${counts.courses}`)
   parts.push(`事项 ${counts.items}`)
   if (counts.schedule > 0) parts.push(`课程表 ${counts.schedule}`)
+  if ((counts.adjustments ?? 0) > 0) parts.push(`调停补课 ${counts.adjustments}`)
   return parts.join(' · ')
 }

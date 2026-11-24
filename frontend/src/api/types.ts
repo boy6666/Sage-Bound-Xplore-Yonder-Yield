@@ -215,6 +215,7 @@ export interface SyncRunCounts {
   courses: number
   items: number
   schedule: number
+  adjustments?: number
 }
 
 export interface SyncRun {

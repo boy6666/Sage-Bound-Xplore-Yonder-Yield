@@ -435,6 +435,24 @@ export function useSyncConnection() {
   })
 }
 
+export function useBrowserLogin() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (connectionId: string) =>
+      api.post<{ status: string; counts: Record<string, number> }>(
+        `/connections/${connectionId}/browser-login`,
+      ),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: ['connections'] })
+      void client.invalidateQueries({ queryKey: ['sync-runs'] })
+      void client.invalidateQueries({ queryKey: ['courses'] })
+      void client.invalidateQueries({ queryKey: ['course'] })
+      void client.invalidateQueries({ queryKey: ['schedule'] })
+      void client.invalidateQueries({ queryKey: ['today'] })
+    },
+  })
+}
+
 export function useSyncRun(id: string | null) {
   return useQuery({
     queryKey: syncRunKeys.detail(id ?? ''),

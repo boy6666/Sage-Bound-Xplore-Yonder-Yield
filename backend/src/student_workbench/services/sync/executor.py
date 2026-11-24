@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from ...errors import AppError
 from ...models import Connection, CourseIdentity, CourseScheduleEntry, SyncRun, WorkItem
 from ...timeutil import as_utc, iso, utcnow
+from .. import academic_sync
 from ..courses import match_course
 from ..settings import current_tz
 from . import fake
@@ -19,14 +20,9 @@ ACTIVE_RUN_STATUSES = ("running",)
 
 
 def ensure_configured(provider: str) -> None:
+    if provider == "academic_portal_v1":
+        return
     if provider in REAL_PROVIDERS:
-        if provider == "academic_portal_v1":
-            raise AppError(
-                "PLATFORM_NOT_CONFIGURED",
-                "教务平台登录需要人工输入验证码，请在命令行运行 workbench academic sync 导入课表",
-                409,
-                {"provider": provider},
-            )
         raise AppError(
             "PLATFORM_NOT_CONFIGURED",
             "该平台适配器尚未配置",
@@ -213,17 +209,21 @@ def _sync_learning(session: Session, connection: Connection) -> dict[str, int]:
     return {"courses": len(identities), "items": item_count, "schedule": 0}
 
 
-def _execute(session: Session, connection: Connection) -> dict[str, int]:
+def _execute(
+    session: Session, connection: Connection, config
+) -> tuple[dict[str, int], str | None]:
     if connection.provider == "academic_fake":
-        return _sync_academic(session, connection)
+        return _sync_academic(session, connection), None
     if connection.provider == "learning_fake":
-        return _sync_learning(session, connection)
+        return _sync_learning(session, connection), None
+    if connection.provider == "academic_portal_v1":
+        return academic_sync.sync_from_cookie(session, connection, config)
     raise AppError(
         "PLATFORM_NOT_CONFIGURED", "该平台适配器尚未配置", 409, {"provider": connection.provider}
     )
 
 
-def start_sync(session: Session, connection: Connection) -> SyncRun:
+def start_sync(session: Session, connection: Connection, config) -> SyncRun:
     ensure_configured(connection.provider)
     active = _active_run(session, connection.id)
     if active is not None:
@@ -246,16 +246,29 @@ def start_sync(session: Session, connection: Connection) -> SyncRun:
     session.flush()
 
     try:
-        counts = _execute(session, connection)
-    except Exception as exc:  # pragma: no cover - fake providers are deterministic
+        counts, warning = _execute(session, connection, config)
+    except AppError as exc:
+        run.status = "failed"
+        run.error_code = exc.code
+        run.error_message = exc.message
+        if exc.code == "PLATFORM_AUTH_REQUIRED":
+            connection.status = "needs_auth"
+        else:
+            connection.status = "error"
+        connection.last_error = exc.message
+    except Exception as exc:  # pragma: no cover - defensive
         run.status = "failed"
         run.error_code = "PLATFORM_STRUCTURE_CHANGED"
         run.error_message = str(exc)[:500]
         connection.status = "error"
         connection.last_error = run.error_message
     else:
-        run.status = "succeeded"
         run.counts_json = counts
+        if warning:
+            run.status = "partial"
+            run.error_message = warning
+        else:
+            run.status = "succeeded"
         connection.status = "ready"
         connection.last_error = None
         connection.last_sync_at = utcnow()
@@ -291,6 +304,7 @@ def serialize_run(session: Session, run: SyncRun, tz: ZoneInfo) -> dict:
             "courses": int(run.counts_json.get("courses", 0)),
             "items": int(run.counts_json.get("items", 0)),
             "schedule": int(run.counts_json.get("schedule", 0)),
+            "adjustments": int(run.counts_json.get("adjustments", 0)),
         },
         "error_code": run.error_code,
         "error_message": run.error_message,

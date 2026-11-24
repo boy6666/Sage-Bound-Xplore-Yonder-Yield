@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query, Response
+from fastapi import APIRouter, Depends, Query, Request, Response
 from sqlalchemy.orm import Session
 
 from ..db import get_session
+from ..errors import AppError
 from ..models import Connection
 from ..schemas import (
+    BrowserLoginOut,
     ChallengeRequest,
     ConnectionCreate,
     ConnectionListOut,
@@ -16,6 +18,7 @@ from ..schemas import (
     SyncRunOut,
     SyncStartOut,
 )
+from ..services.academic_sync import login_with_browser
 from ..services.connections import (
     delete_connection,
     get_connection,
@@ -85,10 +88,35 @@ def login_challenge(
     )
 
 
-@router.post("/{connection_id}/sync", response_model=SyncStartOut, status_code=202)
-def sync_connection(connection_id: str, session: Session = Depends(get_session)):
+@router.post(
+    "/{connection_id}/browser-login",
+    response_model=BrowserLoginOut,
+)
+def browser_login(
+    connection_id: str,
+    request: Request,
+    session: Session = Depends(get_session),
+):
     connection = get_connection(session, connection_id)
-    run = start_sync(session, connection)
+    if connection.provider != "academic_portal_v1":
+        raise AppError(
+            "PLATFORM_NOT_CONFIGURED",
+            "该平台不支持浏览器登录",
+            409,
+            {"provider": connection.provider},
+        )
+    counts = login_with_browser(session, connection, request.app.state.config)
+    return {"status": connection.status, "counts": counts}
+
+
+@router.post("/{connection_id}/sync", response_model=SyncStartOut, status_code=202)
+def sync_connection(
+    connection_id: str,
+    request: Request,
+    session: Session = Depends(get_session),
+):
+    connection = get_connection(session, connection_id)
+    run = start_sync(session, connection, request.app.state.config)
     return {"sync_run_id": run.id}
 
 
