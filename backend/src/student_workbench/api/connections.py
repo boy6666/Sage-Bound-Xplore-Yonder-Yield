@@ -19,6 +19,7 @@ from ..schemas import (
     SyncStartOut,
 )
 from ..services.academic_sync import login_with_browser
+from ..services.chaoxing_sync import login_with_browser as chaoxing_login_with_browser
 from ..services.connections import (
     delete_connection,
     get_connection,
@@ -98,14 +99,19 @@ def browser_login(
     session: Session = Depends(get_session),
 ):
     connection = get_connection(session, connection_id)
-    if connection.provider != "academic_portal_v1":
+    if connection.provider == "academic_portal_v1":
+        counts = login_with_browser(session, connection, request.app.state.config)
+    elif connection.provider == "chaoxing_v1":
+        counts = chaoxing_login_with_browser(
+            session, connection, request.app.state.config
+        )
+    else:
         raise AppError(
             "PLATFORM_NOT_CONFIGURED",
             "该平台不支持浏览器登录",
             409,
             {"provider": connection.provider},
         )
-    counts = login_with_browser(session, connection, request.app.state.config)
     return {"status": connection.status, "counts": counts}
 
 

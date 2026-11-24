@@ -110,7 +110,7 @@ def test_challenge_flow(client):
     assert client.post(f"/api/v1/connections/{connection['id']}/sync").status_code == 202
 
 
-def test_real_provider_is_not_configured(client):
+def test_chaoxing_sync_requires_login(client):
     connection = create_connection(
         client, kind="learning", provider="chaoxing_v1", name="学习通"
     )
@@ -123,7 +123,7 @@ def test_real_provider_is_not_configured(client):
 
     sync = client.post(f"/api/v1/connections/{connection['id']}/sync")
     assert sync.status_code == 409
-    assert sync.json()["error"]["code"] == "PLATFORM_NOT_CONFIGURED"
+    assert sync.json()["error"]["code"] == "PLATFORM_AUTH_REQUIRED"
 
 
 def test_existing_running_sync_returns_same_run(client, session_factory):

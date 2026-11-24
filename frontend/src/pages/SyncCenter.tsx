@@ -36,6 +36,8 @@ import {
   syncCountsText,
 } from '../lib/format'
 
+const BROWSER_LOGIN_PROVIDERS = new Set(['academic_portal_v1', 'chaoxing_v1'])
+
 function LoginPanel({
   connection,
   onSuccess,
@@ -344,7 +346,7 @@ export function SyncCenter() {
         if (
           error instanceof ApiError &&
           error.code === 'PLATFORM_AUTH_REQUIRED' &&
-          connection.provider === 'academic_portal_v1'
+          BROWSER_LOGIN_PROVIDERS.has(connection.provider)
         ) {
           handleBrowserLogin(connection)
           return
@@ -364,7 +366,7 @@ export function SyncCenter() {
     if (autoLoginRunRef.current === run.id) return
     autoLoginRunRef.current = run.id
     const target = connections.find((item) => item.id === run.connection_id)
-    if (target && target.provider === 'academic_portal_v1') {
+    if (target && BROWSER_LOGIN_PROVIDERS.has(target.provider)) {
       handleBrowserLogin(target)
     }
   }, [activeRun.data, connections, handleBrowserLogin])
@@ -471,7 +473,7 @@ export function SyncCenter() {
                   browserLogin.variables === connection.id)
               }
               onLogin={(item) => {
-                if (item.provider === 'academic_portal_v1') handleBrowserLogin(item)
+                if (BROWSER_LOGIN_PROVIDERS.has(item.provider)) handleBrowserLogin(item)
                 else setLoginTarget(item)
               }}
               onSync={handleSync}

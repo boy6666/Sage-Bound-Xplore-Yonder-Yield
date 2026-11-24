@@ -148,8 +148,14 @@ def test_unknown_provider_still_rejected():
     from student_workbench.services.sync.executor import ensure_configured
 
     with pytest.raises(AppError) as excinfo:
-        ensure_configured("chaoxing_v1")
+        ensure_configured("unknown_provider")
     assert excinfo.value.code == "PLATFORM_NOT_CONFIGURED"
+
+
+def test_chaoxing_provider_is_configured():
+    from student_workbench.services.sync.executor import ensure_configured
+
+    ensure_configured("chaoxing_v1")
 
 
 def test_missing_browser_dependency_has_its_own_code(

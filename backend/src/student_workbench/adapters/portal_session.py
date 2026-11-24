@@ -25,12 +25,17 @@ class StoredCookies:
     cookies: list[dict]
 
 
-def cookie_path(data_dir: Path) -> Path:
-    return Path(data_dir) / "cookies" / COOKIE_FILENAME
+def cookie_path(data_dir: Path, provider: str = "academic_portal_v1") -> Path:
+    return Path(data_dir) / "cookies" / f"{provider}.json"
 
 
-def save_cookies(data_dir: Path, cookies: list[dict], saved_at: str) -> Path:
-    path = cookie_path(data_dir)
+def save_cookies(
+    data_dir: Path,
+    cookies: list[dict],
+    saved_at: str,
+    provider: str = "academic_portal_v1",
+) -> Path:
+    path = cookie_path(data_dir, provider)
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {"saved_at": saved_at, "cookies": cookies}
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -41,8 +46,10 @@ def save_cookies(data_dir: Path, cookies: list[dict], saved_at: str) -> Path:
     return path
 
 
-def load_cookies(data_dir: Path) -> StoredCookies | None:
-    path = cookie_path(data_dir)
+def load_cookies(
+    data_dir: Path, provider: str = "academic_portal_v1"
+) -> StoredCookies | None:
+    path = cookie_path(data_dir, provider)
     if not path.exists():
         return None
     try:
@@ -65,8 +72,8 @@ def to_httpx_cookies(cookies: list[dict]) -> dict[str, str]:
     return jar
 
 
-def clear_cookies(data_dir: Path) -> bool:
-    path = cookie_path(data_dir)
+def clear_cookies(data_dir: Path, provider: str = "academic_portal_v1") -> bool:
+    path = cookie_path(data_dir, provider)
     if path.exists():
         try:
             path.unlink()

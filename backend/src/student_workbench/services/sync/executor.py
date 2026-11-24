@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from ...errors import AppError
 from ...models import Connection, CourseIdentity, CourseScheduleEntry, SyncRun, WorkItem
 from ...timeutil import as_utc, iso, utcnow
-from .. import academic_sync
+from .. import academic_sync, chaoxing_sync
 from ..courses import match_course
 from ..settings import current_tz
 from . import fake
@@ -20,15 +20,8 @@ ACTIVE_RUN_STATUSES = ("running",)
 
 
 def ensure_configured(provider: str) -> None:
-    if provider == "academic_portal_v1":
+    if provider in ("academic_portal_v1", "chaoxing_v1"):
         return
-    if provider in REAL_PROVIDERS:
-        raise AppError(
-            "PLATFORM_NOT_CONFIGURED",
-            "该平台适配器尚未配置",
-            409,
-            {"provider": provider},
-        )
     if provider not in FAKE_PROVIDERS:
         raise AppError(
             "PLATFORM_NOT_CONFIGURED",
@@ -55,7 +48,7 @@ def _active_run(session: Session, connection_id: str) -> SyncRun | None:
     ).first()
 
 
-def _upsert_identity(
+def upsert_identity(
     session: Session, connection: Connection, external: dict
 ) -> CourseIdentity:
     identity = session.scalar(
@@ -135,7 +128,7 @@ def _upsert_schedule(
 def _sync_academic(session: Session, connection: Connection) -> dict[str, int]:
     identities: dict[str, CourseIdentity] = {}
     for external in fake.ACADEMIC_COURSES:
-        identities[external["external_id"]] = _upsert_identity(
+        identities[external["external_id"]] = upsert_identity(
             session, connection, external
         )
 
@@ -159,7 +152,7 @@ def _sync_learning(session: Session, connection: Connection) -> dict[str, int]:
     tz = current_tz(session)
     identities: dict[str, CourseIdentity] = {}
     for external in fake.LEARNING_COURSES:
-        identities[external["external_id"]] = _upsert_identity(
+        identities[external["external_id"]] = upsert_identity(
             session, connection, external
         )
 
@@ -218,6 +211,8 @@ def _execute(
         return _sync_learning(session, connection), None
     if connection.provider == "academic_portal_v1":
         return academic_sync.sync_from_cookie(session, connection, config)
+    if connection.provider == "chaoxing_v1":
+        return chaoxing_sync.sync_from_cookie(session, connection, config)
     raise AppError(
         "PLATFORM_NOT_CONFIGURED", "该平台适配器尚未配置", 409, {"provider": connection.provider}
     )

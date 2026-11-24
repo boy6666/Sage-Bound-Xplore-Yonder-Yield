@@ -17,7 +17,7 @@ from ..models import (
 from ..timeutil import iso
 from . import credentials
 from .settings import get_settings_row
-from .sync.executor import ensure_configured
+from .sync.executor import REAL_PROVIDERS, ensure_configured
 
 CHALLENGE_USERNAME = "challenge-user"
 CHALLENGE_CODE = "1234"
@@ -60,6 +60,13 @@ def start_login(
     password: str,
     save_password: bool,
 ) -> dict:
+    if connection.provider in REAL_PROVIDERS:
+        raise AppError(
+            "PLATFORM_NOT_CONFIGURED",
+            "该平台需要通过浏览器登录",
+            409,
+            {"provider": connection.provider},
+        )
     ensure_configured(connection.provider)
     settings_row = get_settings_row(session)
 
