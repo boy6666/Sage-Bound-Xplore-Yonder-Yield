@@ -113,3 +113,23 @@ def test_items_are_empty_without_term_start(session_factory):
 
     assert payload["items"] == []
     assert payload["week_start"] is None
+
+
+def test_explicit_week_start_overrides_term_start(session_factory):
+    with session_factory() as session:
+        _seed(session)
+        _item(session, "第三周任务", planned=_local_noon(date(2026, 9, 22)))
+        session.commit()
+
+        payload = schedule_payload(
+            session,
+            TZ,
+            week_start=date(2026, 9, 21),
+            current_week=3,
+            week_source="portal",
+        )
+
+    assert payload["week_start"] == "2026-09-21"
+    assert payload["current_week"] == 3
+    assert payload["week_source"] == "portal"
+    assert [item["title"] for item in payload["items"]] == ["第三周任务"]

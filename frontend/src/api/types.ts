@@ -187,6 +187,7 @@ export interface ScheduleResponse {
   term_start_date: string | null
   current_week: number
   week_start: string | null
+  week_source: 'portal' | 'cached' | 'fallback' | 'computed' | null
   entries: ScheduleEntry[]
   items: ScheduleItem[]
   missing_term_start: boolean

@@ -211,7 +211,12 @@ def _schedule_items(
 
 
 def schedule_payload(
-    session: Session, tz: ZoneInfo, week: int | None = None
+    session: Session,
+    tz: ZoneInfo,
+    week: int | None = None,
+    week_start: date | None = None,
+    current_week: int | None = None,
+    week_source: str | None = None,
 ) -> dict:
     settings_row = get_settings_row(session)
     term_start = settings_row.term_start_date
@@ -226,25 +231,28 @@ def schedule_payload(
     ).all()
     if week is not None:
         entries = [entry for entry in entries if week in (entry.weeks or [])]
-    current_week = None
+
+    computed_week = None
     if term_start is not None:
         today = local_today(tz)
         delta_days = (today - term_start).days
         if delta_days >= 0:
-            current_week = delta_days // 7 + 1
+            computed_week = delta_days // 7 + 1
+    resolved_week = current_week if current_week is not None else computed_week
 
-    week_start = None
-    items: list[dict] = []
-    if term_start is not None:
-        target_week = week if week is not None else current_week
+    target_start = week_start
+    if target_start is None and term_start is not None:
+        target_week = week if week is not None else resolved_week
         if target_week is not None:
-            week_start = week_start_for(term_start, target_week)
-            items = _schedule_items(session, tz, week_start)
+            target_start = week_start_for(term_start, target_week)
+
+    items = _schedule_items(session, tz, target_start) if target_start else []
 
     return {
         "term_start_date": date_str(term_start),
-        "current_week": current_week,
-        "week_start": date_str(week_start),
+        "current_week": resolved_week,
+        "week_start": date_str(target_start),
+        "week_source": week_source or ("computed" if resolved_week is not None else None),
         "entries": [serialize_entry(session, entry) for entry in entries],
         "items": items,
         "missing_term_start": term_start is None,

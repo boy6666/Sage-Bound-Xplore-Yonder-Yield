@@ -130,15 +130,16 @@ def _match_adjustment(
 
 
 def classes_today(
-    session: Session, day: date, settings_row
+    session: Session, day: date, settings_row, week: int | None = None
 ) -> tuple[list[dict], bool]:
     term_start = settings_row.term_start_date
-    if term_start is None:
-        return [], True
-    delta_days = (day - term_start).days
-    if delta_days < 0:
-        return [], False
-    week = delta_days // 7 + 1
+    if week is None:
+        if term_start is None:
+            return [], True
+        delta_days = (day - term_start).days
+        if delta_days < 0:
+            return [], False
+        week = delta_days // 7 + 1
     weekday = day.isoweekday()
 
     entries = session.scalars(
@@ -254,13 +255,15 @@ def data_warnings(session: Session, missing_term_start: bool) -> list[str]:
     return warnings
 
 
-def build_today(session: Session, day: date | None = None) -> dict:
+def build_today(
+    session: Session, day: date | None = None, week: int | None = None
+) -> dict:
     settings_row = get_settings_row(session)
     tz = current_tz(session)
     if day is None:
         day = local_today(tz)
     groups = classify_items(session, day, tz, settings_row.upcoming_days)
-    classes, missing_term_start = classes_today(session, day, settings_row)
+    classes, missing_term_start = classes_today(session, day, settings_row, week)
     return {
         "date": day.isoformat(),
         "timezone": settings_row.timezone,

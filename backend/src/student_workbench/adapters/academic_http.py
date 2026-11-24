@@ -7,6 +7,7 @@ import httpx
 DEFAULT_KB_URL = "http://jw.xujc.com/student/index.php?c=Default&a=Kb"
 DEFAULT_TBK_URL = "http://jw.xujc.com/student/index.php?c=Default&a=tbk"
 DEFAULT_LOGIN_URL = "http://jw.xujc.com/student/index.php"
+DEFAULT_HOME_URL = "http://jw.xujc.com/"
 
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -35,13 +36,16 @@ def _fetch(
     *,
     login_url: str,
     timeout: float,
+    referer: str | None = None,
 ) -> str:
     headers = {
         "User-Agent": USER_AGENT,
-        "Referer": login_url,
         "Accept-Language": "zh-CN,zh;q=0.9",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     }
+    effective_referer = login_url if referer is None else referer
+    if effective_referer:
+        headers["Referer"] = effective_referer
     with httpx.Client(
         cookies=cookie_jar,
         headers=headers,
@@ -65,6 +69,25 @@ def fetch_schedule_html(
     if classify(html) == STATE_LOGIN:
         return ""
     return html
+
+
+def fetch_home_html(
+    cookie_jar: dict[str, str],
+    *,
+    home_url: str = DEFAULT_HOME_URL,
+    login_url: str = DEFAULT_LOGIN_URL,
+    timeout: float = 15.0,
+) -> str:
+    """Return the portal home page HTML.
+
+    The home page always renders a login button, so its presence does not mean the
+    session expired. Callers detect expiry by failing to find the week marker.
+    Sending a ``Referer`` makes the server return a different shell page without
+    the week block, so this request deliberately omits it.
+    """
+    return _fetch(
+        home_url, cookie_jar, login_url=login_url, timeout=timeout, referer=""
+    )
 
 
 def fetch_adjustments_html(

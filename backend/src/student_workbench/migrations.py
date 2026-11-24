@@ -18,6 +18,10 @@ _ADDED_COLUMNS: dict[str, dict[str, str]] = {
         "period_start": "INTEGER",
         "period_end": "INTEGER",
     },
+    "settings": {
+        "portal_week": "INTEGER",
+        "portal_week_checked_on": "DATE",
+    },
 }
 
 

@@ -37,6 +37,8 @@ class Settings(Base):
         Boolean, default=False, nullable=False
     )
     term_start_date: Mapped[date | None] = mapped_column(Date)
+    portal_week: Mapped[int | None] = mapped_column(Integer)
+    portal_week_checked_on: Mapped[date | None] = mapped_column(Date)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow

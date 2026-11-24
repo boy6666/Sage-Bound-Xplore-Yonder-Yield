@@ -310,6 +310,7 @@ class ScheduleOut(BaseModel):
     term_start_date: str | None
     current_week: int | None
     week_start: str | None
+    week_source: Literal["portal", "cached", "fallback", "computed"] | None
     entries: list[ScheduleEntryOut]
     items: list[ScheduleItemOut]
     missing_term_start: bool

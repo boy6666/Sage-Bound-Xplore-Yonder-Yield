@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.orm import Session
 
 from ..db import get_session
@@ -29,7 +29,8 @@ from ..services.courses import (
     unlink_identity,
     unmatched_identities,
 )
-from ..services.settings import current_tz
+from ..services.current_week import get_current_week
+from ..services.settings import current_tz, get_settings_row
 
 router = APIRouter(prefix="/api/v1/courses", tags=["courses"])
 identities_router = APIRouter(prefix="/api/v1/course-identities", tags=["courses"])
@@ -51,11 +52,21 @@ def create_course_endpoint(
 
 @router.get("/schedule", response_model=ScheduleOut)
 def get_schedule(
+    request: Request,
     week: int | None = Query(default=None, ge=1, le=60),
     session: Session = Depends(get_session),
 ):
     tz = current_tz(session)
-    return schedule_payload(session, tz, week)
+    row = get_settings_row(session)
+    value = get_current_week(request.app.state.config, session, row, tz)
+    return schedule_payload(
+        session,
+        tz,
+        week,
+        week_start=value.week_start if value else None,
+        current_week=value.week if value else None,
+        week_source=value.source if value else None,
+    )
 
 
 @router.get("/{course_id}", response_model=CourseDetailOut)

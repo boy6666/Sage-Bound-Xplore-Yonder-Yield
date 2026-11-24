@@ -41,6 +41,12 @@ export function Schedule() {
 
   const data = scheduleQuery.data
   const activeWeek = data.current_week
+  const weekSource =
+    data.week_source === 'portal'
+      ? '来自教务页面'
+      : data.week_source === 'cached'
+        ? '教务页面缓存'
+        : '本地推算'
 
   return (
     <div className="space-y-4">
@@ -49,6 +55,7 @@ export function Schedule() {
           <h1 className="text-xl font-semibold text-ink">课程表</h1>
           <p className="text-sm text-muted">
             第 {activeWeek} 教学周
+            <span className="text-xs">（{weekSource}）</span>
             {data.term_start_date
               ? ` · 第一教学周周一 ${formatDate(data.term_start_date)}`
               : ''}
