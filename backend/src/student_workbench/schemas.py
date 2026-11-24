@@ -291,10 +291,27 @@ class CourseListOut(BaseModel):
     items: list[CourseOut]
 
 
+class ScheduleItemOut(BaseModel):
+    id: str
+    title: str
+    weekday: int
+    kind: Literal["planned", "due"]
+    time_label: str
+    item_type: ItemType
+    priority: Priority
+    status: WorkItemStatus
+    course_id: str | None
+    course_name: str | None
+    due_at: str | None
+    planned_start_at: str | None
+
+
 class ScheduleOut(BaseModel):
     term_start_date: str | None
     current_week: int | None
+    week_start: str | None
     entries: list[ScheduleEntryOut]
+    items: list[ScheduleItemOut]
     missing_term_start: bool
 
 

@@ -98,6 +98,7 @@ function invalidateWorkItemRelated(client: QueryClient): void {
   void client.invalidateQueries({ queryKey: ['project'] })
   void client.invalidateQueries({ queryKey: ['courses'] })
   void client.invalidateQueries({ queryKey: ['course'] })
+  void client.invalidateQueries({ queryKey: ['schedule'] })
 }
 
 function invalidateProjectRelated(client: QueryClient): void {

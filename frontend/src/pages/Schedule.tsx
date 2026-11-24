@@ -90,10 +90,11 @@ export function Schedule() {
         </div>
       ) : null}
 
-      <ScheduleGrid entries={data.entries} />
+      <ScheduleGrid entries={data.entries} items={data.items} />
 
       <p className="text-xs text-muted">
-        课程条目来自教务课程表，不是待办；点击课程可查看该课程的跨平台待办。
+        课程条目来自教务课程表，不是待办；下方“本周任务”是按计划开始时间或截止时间落到本周的事项。
+        点击课程可查看该课程的跨平台待办。
       </p>
     </div>
   )

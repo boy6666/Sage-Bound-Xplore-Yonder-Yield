@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from datetime import date, timedelta
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import select, update
@@ -14,7 +15,7 @@ from ..models import (
     WorkItem,
 )
 from ..schemas import CourseCreate
-from ..timeutil import date_str, local_today
+from ..timeutil import date_str, ensure_utc, iso, local_date, local_today
 from .settings import get_settings_row
 from .work_items import ACTIVE_STATUSES, open_count, serialize_item
 
@@ -147,6 +148,68 @@ def course_detail(session: Session, course: Course, tz: ZoneInfo) -> dict:
     }
 
 
+def week_start_for(term_start: date, week: int) -> date:
+    return term_start + timedelta(days=(week - 1) * 7)
+
+
+def _hhmm(value, tz: ZoneInfo) -> str:
+    normalized = ensure_utc(value)
+    if normalized is None:
+        return ''
+    return normalized.astimezone(tz).strftime('%H:%M')
+
+
+def _schedule_items(
+    session: Session, tz: ZoneInfo, week_start: date
+) -> list[dict]:
+    rows = session.scalars(
+        select(WorkItem)
+        .where(WorkItem.status.not_in(("done", "dismissed")))
+        .order_by(WorkItem.id)
+    ).unique().all()
+
+    course_ids = {row.course_id for row in rows if row.course_id}
+    names: dict[str, str] = {}
+    if course_ids:
+        names = {
+            course.id: course.name
+            for course in session.scalars(
+                select(Course).where(Course.id.in_(course_ids))
+            )
+        }
+
+    items: list[dict] = []
+    for row in rows:
+        planned = row.planned_start_at is not None
+        anchor = row.planned_start_at if planned else row.due_at
+        anchor_date = local_date(anchor, tz)
+        if anchor_date is None:
+            continue
+        offset = (anchor_date - week_start).days
+        if offset < 0 or offset > 6:
+            continue
+        clock = _hhmm(anchor, tz)
+        items.append(
+            {
+                "id": row.id,
+                "title": row.title,
+                "weekday": offset + 1,
+                "kind": "planned" if planned else "due",
+                "time_label": clock if planned else f"截止 {clock}",
+                "item_type": row.item_type,
+                "priority": row.priority,
+                "status": row.status,
+                "course_id": row.course_id,
+                "course_name": names.get(row.course_id) if row.course_id else None,
+                "due_at": iso(row.due_at, tz),
+                "planned_start_at": iso(row.planned_start_at, tz),
+            }
+        )
+
+    items.sort(key=lambda item: (item["weekday"], item["time_label"]))
+    return items
+
+
 def schedule_payload(
     session: Session, tz: ZoneInfo, week: int | None = None
 ) -> dict:
@@ -169,10 +232,21 @@ def schedule_payload(
         delta_days = (today - term_start).days
         if delta_days >= 0:
             current_week = delta_days // 7 + 1
+
+    week_start = None
+    items: list[dict] = []
+    if term_start is not None:
+        target_week = week if week is not None else current_week
+        if target_week is not None:
+            week_start = week_start_for(term_start, target_week)
+            items = _schedule_items(session, tz, week_start)
+
     return {
         "term_start_date": date_str(term_start),
         "current_week": current_week,
+        "week_start": date_str(week_start),
         "entries": [serialize_entry(session, entry) for entry in entries],
+        "items": items,
         "missing_term_start": term_start is None,
     }
 

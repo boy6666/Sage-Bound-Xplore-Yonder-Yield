@@ -1,8 +1,17 @@
+import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import type { Provider } from '../api/types'
-import { useCourse, useUnlinkIdentity } from '../api/queries'
+import type { Provider, WorkItemInput } from '../api/types'
+import {
+  useCourse,
+  useCourses,
+  useCreateWorkItem,
+  useProjects,
+  useUnlinkIdentity,
+} from '../api/queries'
 import { EmptyState } from '../components/EmptyState'
 import { ErrorState } from '../components/ErrorState'
+import { Modal } from '../components/Modal'
+import { WorkItemForm } from '../components/WorkItemForm'
 import { WorkItemRow } from '../components/WorkItemRow'
 import { weekdayLabel } from '../lib/date'
 import { MATCH_STATUS_LABELS, PROVIDER_LABELS, errorMessage } from '../lib/format'
@@ -15,6 +24,19 @@ export function CourseDetail() {
   const { id } = useParams<{ id: string }>()
   const courseQuery = useCourse(id)
   const unlinkIdentity = useUnlinkIdentity()
+  const coursesQuery = useCourses()
+  const projectsQuery = useProjects()
+  const createItem = useCreateWorkItem()
+  const [formOpen, setFormOpen] = useState(false)
+
+  const closeForm = (): void => {
+    setFormOpen(false)
+    createItem.reset()
+  }
+
+  const handleCreate = (input: WorkItemInput): void => {
+    createItem.mutate(input, { onSuccess: () => closeForm() })
+  }
 
   const handleUnlink = (identityId: string, name: string): void => {
     const confirmed = window.confirm(
@@ -141,14 +163,34 @@ export function CourseDetail() {
       </div>
 
       <section className="space-y-2">
-        <h2 className="text-sm font-semibold text-ink">
-          跨平台待办
-          <span className="ml-1.5 text-xs font-normal text-muted">（未完成 {course.open_todos} 项）</span>
-        </h2>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold text-ink">
+            跨平台待办
+            <span className="ml-1.5 text-xs font-normal text-muted">
+              （未完成 {course.open_todos} 项）
+            </span>
+          </h2>
+          <button
+            type="button"
+            className="btn btn-sm btn-primary"
+            onClick={() => setFormOpen(true)}
+          >
+            新建作业 / 任务
+          </button>
+        </div>
         {todos.length === 0 ? (
           <EmptyState
             title="该课程没有待办"
-            description="学习平台同步的作业与手动关联的事项会出现在这里。"
+            description="学习平台同步的作业与手动创建的事项会同时出现在这里，互不覆盖。"
+            action={
+              <button
+                type="button"
+                className="btn btn-sm btn-primary"
+                onClick={() => setFormOpen(true)}
+              >
+                新建作业 / 任务
+              </button>
+            }
           />
         ) : (
           <div className="space-y-2">
@@ -158,6 +200,26 @@ export function CourseDetail() {
           </div>
         )}
       </section>
+
+      <Modal
+        open={formOpen}
+        title="新建作业 / 任务"
+        description={`已归属课程「${course.name}」。填写计划开始时间后，该事项会出现在日程表里。`}
+        onClose={closeForm}
+        widthClass="max-w-2xl"
+      >
+        <WorkItemForm
+          key={`course-${course.id}`}
+          initial={{ course_id: course.id, item_type: 'assignment' }}
+          courses={coursesQuery.data?.items ?? []}
+          projects={projectsQuery.data?.items ?? []}
+          submitting={createItem.isPending}
+          serverError={createItem.error}
+          onSubmit={handleCreate}
+          onCancel={closeForm}
+          submitLabel="创建"
+        />
+      </Modal>
     </div>
   )
 }

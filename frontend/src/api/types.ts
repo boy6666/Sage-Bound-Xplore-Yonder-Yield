@@ -168,10 +168,27 @@ export interface CourseDetailResponse {
   todos: WorkItem[]
 }
 
+export interface ScheduleItem {
+  id: string
+  title: string
+  weekday: number
+  kind: 'planned' | 'due'
+  time_label: string
+  item_type: WorkItem['item_type']
+  priority: WorkItem['priority']
+  status: WorkItem['status']
+  course_id: string | null
+  course_name: string | null
+  due_at: string | null
+  planned_start_at: string | null
+}
+
 export interface ScheduleResponse {
   term_start_date: string | null
   current_week: number
+  week_start: string | null
   entries: ScheduleEntry[]
+  items: ScheduleItem[]
   missing_term_start: boolean
 }
 
