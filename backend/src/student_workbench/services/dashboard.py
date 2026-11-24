@@ -10,11 +10,14 @@ from ..models import (
     Connection,
     Course,
     CourseScheduleEntry,
+    PeriodTime,
     Project,
+    ScheduleAdjustment,
     SyncRun,
     WorkItem,
 )
 from ..timeutil import local_date, local_today, utcnow
+from .courses import normalize_name
 from .projects import project_health
 from .settings import current_tz, get_settings_row
 from .work_items import ACTIVE_STATUSES, open_count, serialize_item
@@ -70,6 +73,18 @@ def classify_items(
     }
 
 
+def _match_adjustment(course_name: str, adjustments: list) -> tuple[str, str | None]:
+    for adjustment in adjustments:
+        if adjustment.kind == "makeup":
+            continue
+        if normalize_name(adjustment.course_name) != normalize_name(course_name):
+            continue
+        if adjustment.kind == "cancel":
+            return "cancelled", adjustment.period_label or "停课"
+        return "moved", adjustment.period_label or "调课"
+    return "normal", None
+
+
 def classes_today(
     session: Session, day: date, settings_row
 ) -> tuple[list[dict], bool]:
@@ -80,20 +95,35 @@ def classes_today(
     if delta_days < 0:
         return [], False
     week = delta_days // 7 + 1
+    weekday = day.isoweekday()
+
     entries = session.scalars(
         select(CourseScheduleEntry)
         .where(CourseScheduleEntry.course_id.is_not(None))
         .order_by(CourseScheduleEntry.start_time, CourseScheduleEntry.id)
     ).all()
-    result = []
+
+    adjustments = session.scalars(select(ScheduleAdjustment)).all()
+    day_adjustments = [
+        adjustment
+        for adjustment in adjustments
+        if (adjustment.adjusted_on is not None and adjustment.adjusted_on == day)
+        or (adjustment.week == week and adjustment.weekday == weekday)
+    ]
+    period_times: dict[int, tuple[str, str]] = {}
+    for row in session.scalars(select(PeriodTime)).all():
+        period_times.setdefault(row.period, (row.start_time, row.end_time))
+
+    result: list[dict] = []
     for entry in entries:
-        if entry.weekday != day.isoweekday():
+        if entry.weekday != weekday:
             continue
         if week not in (entry.weeks or []):
             continue
         course = session.get(Course, entry.course_id)
         if course is None:
             continue
+        status, note = _match_adjustment(course.name, day_adjustments)
         result.append(
             {
                 "course_id": course.id,
@@ -102,8 +132,35 @@ def classes_today(
                 "end_time": entry.end_time,
                 "location": entry.location,
                 "open_todos": open_count(session, course_id=course.id),
+                "status": status,
+                "adjustment_note": note,
             }
         )
+
+    for adjustment in day_adjustments:
+        if adjustment.kind != "makeup":
+            continue
+        start, end = period_times.get(adjustment.period_start or 0, ("", ""))
+        if adjustment.period_end:
+            end = period_times.get(adjustment.period_end, (start, end))[1] or end
+        result.append(
+            {
+                "course_id": adjustment.course_id or "",
+                "course_name": adjustment.course_name,
+                "start_time": start,
+                "end_time": end,
+                "location": adjustment.room,
+                "open_todos": (
+                    open_count(session, course_id=adjustment.course_id)
+                    if adjustment.course_id
+                    else 0
+                ),
+                "status": "makeup",
+                "adjustment_note": f"补课 {adjustment.period_label or ''}".strip(),
+            }
+        )
+
+    result.sort(key=lambda item: (item["start_time"] or "99:99", item["course_name"]))
     return result, False
 
 

@@ -241,6 +241,8 @@ export interface TodayClass {
   end_time: string
   location: string | null
   open_todos: number
+  status?: 'normal' | 'cancelled' | 'moved' | 'makeup'
+  adjustment_note?: string | null
 }
 
 export interface ProjectRisk {

@@ -169,36 +169,60 @@ export function Today() {
             </p>
           ) : (
             <ul className="space-y-2">
-              {data.classes_today.map((entry) => (
-                <li
-                  key={`${entry.course_id}-${entry.start_time}`}
-                  className="rounded-lg border border-edge bg-surface-2/50 p-2.5"
-                >
-                  <div className="flex flex-wrap items-baseline justify-between gap-2">
-                    <Link
-                      to={`/courses/${entry.course_id}`}
-                      className="text-sm font-medium text-ink hover:text-accent"
-                    >
-                      {entry.course_name}
-                    </Link>
-                    <span className="text-xs text-muted">
-                      {entry.start_time}-{entry.end_time}
-                    </span>
-                  </div>
-                  <p className="text-xs text-muted">
-                    {entry.location ?? '地点未设置'}
-                  </p>
-                  <p className="mt-1 text-xs text-muted">
-                    该课程未完成待办：
-                    <Link
-                      to={`/inbox?course_id=${entry.course_id}`}
-                      className="text-accent hover:underline"
-                    >
-                      {entry.open_todos} 项
-                    </Link>
-                  </p>
-                </li>
-              ))}
+              {data.classes_today.map((entry) => {
+                const badge =
+                  entry.status === 'cancelled'
+                    ? { label: '已停课', cls: 'border-rose-400/40 text-rose-300' }
+                    : entry.status === 'moved'
+                      ? { label: '已调课', cls: 'border-amber-400/40 text-amber-300' }
+                      : entry.status === 'makeup'
+                        ? { label: '补课', cls: 'border-sky-400/40 text-sky-300' }
+                        : null
+                return (
+                  <li
+                    key={`${entry.course_id}-${entry.start_time}-${entry.status ?? 'normal'}`}
+                    className="rounded-lg border border-edge bg-surface-2/50 p-2.5"
+                  >
+                    <div className="flex flex-wrap items-baseline justify-between gap-2">
+                      <span className="flex items-center gap-1.5">
+                        <Link
+                          to={`/courses/${entry.course_id}`}
+                          className={
+                            entry.status === 'cancelled'
+                              ? 'text-sm font-medium text-muted line-through'
+                              : 'text-sm font-medium text-ink hover:text-accent'
+                          }
+                        >
+                          {entry.course_name}
+                        </Link>
+                        {badge ? (
+                          <span
+                            className={`rounded border px-1.5 py-0.5 text-[11px] font-medium ${badge.cls}`}
+                          >
+                            {badge.label}
+                          </span>
+                        ) : null}
+                      </span>
+                      <span className="text-xs text-muted">
+                        {entry.start_time}-{entry.end_time}
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted">
+                      {entry.location ?? '地点未设置'}
+                      {entry.adjustment_note ? ` · ${entry.adjustment_note}` : ''}
+                    </p>
+                    <p className="mt-1 text-xs text-muted">
+                      该课程未完成待办：
+                      <Link
+                        to={`/inbox?course_id=${entry.course_id}`}
+                        className="text-accent hover:underline"
+                      >
+                        {entry.open_todos} 项
+                      </Link>
+                    </p>
+                  </li>
+                )
+              })}
             </ul>
           )}
         </section>

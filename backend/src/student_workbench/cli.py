@@ -150,6 +150,53 @@ def _academic_sync(args: argparse.Namespace) -> int:
     return _import_html(factory, connection_id, html, args.save_html)
 
 
+def _academic_adjustments(args: argparse.Namespace) -> int:
+    from .adapters.academic_http import fetch_adjustments_html
+    from .adapters.adjustments_parser import parse_adjustments_html
+    from .adapters.portal_session import load_cookies, to_httpx_cookies
+    from .models import Connection
+    from .services.academic_import import import_adjustments
+
+    config, factory, select = _session_factory()
+    connection_id = _academic_connection(factory, select, args)
+    if connection_id is None:
+        return 2
+
+    stored = load_cookies(config.data_dir)
+    if stored is None:
+        print("没有可用的登录会话，请先运行一次：workbench academic login")
+        return 1
+
+    print("使用本地保存的 Cookie 请求调停补课页…")
+    try:
+        html = fetch_adjustments_html(to_httpx_cookies(stored.cookies))
+    except Exception as exc:  # noqa: BLE001
+        print(f"请求失败: {exc}")
+        return 1
+    if not html:
+        print("登录会话已失效，请重新运行一次：workbench academic login")
+        return 1
+
+    if args.save_html:
+        saved = Path(args.save_html)
+        saved.parent.mkdir(parents=True, exist_ok=True)
+        saved.write_text(html, encoding="utf-8")
+        print(f"已保存页面: {saved}")
+
+    parsed = parse_adjustments_html(html)
+    with factory() as session:
+        connection = session.get(Connection, connection_id)
+        result = import_adjustments(session, connection, parsed)
+        session.commit()
+
+    print(f"学期: {parsed.term_label or '未知'}")
+    print(
+        f"调停补课: {result['records']} 条"
+        f"（新增 {result['created']}，移除 {result['removed']}）"
+    )
+    return 0
+
+
 def _academic_logout(args: argparse.Namespace) -> int:
     from .adapters.portal_session import clear_cookies, cookie_path
 
@@ -184,6 +231,13 @@ def build_parser() -> argparse.ArgumentParser:
     sync.add_argument("--display-name", default="教务系统")
     sync.add_argument("--save-html", default=None)
 
+    adjustments = academic_sub.add_parser(
+        "adjustments", help="用已保存的 Cookie 抓取调停补课记录（不打开浏览器）"
+    )
+    adjustments.add_argument("--connection-id", default=None)
+    adjustments.add_argument("--display-name", default="教务系统")
+    adjustments.add_argument("--save-html", default=None)
+
     academic_sub.add_parser("logout", help="删除本地保存的登录 Cookie")
 
     return parser
@@ -199,6 +253,8 @@ def main(argv: list[str] | None = None) -> int | None:
             return _academic_login(args)
         if action == "sync":
             return _academic_sync(args)
+        if action == "adjustments":
+            return _academic_adjustments(args)
         if action == "logout":
             return _academic_logout(args)
         parser.parse_args(["academic", "--help"])

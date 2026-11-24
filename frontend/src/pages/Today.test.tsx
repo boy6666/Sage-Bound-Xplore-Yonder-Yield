@@ -74,7 +74,7 @@ const dashboard: TodayDashboard = {
   data_warnings: ['学习通（示例）最近一次同步失败'],
 }
 
-function stubToday(): ReturnType<typeof stubFetch> {
+function stubToday(data: TodayDashboard = dashboard): ReturnType<typeof stubFetch> {
   return stubFetch([
     (url, _init, method) => {
       if (method === 'GET' && url.endsWith('/api/v1/bootstrap')) {
@@ -88,7 +88,7 @@ function stubToday(): ReturnType<typeof stubFetch> {
         }
       }
       if (method === 'GET' && url.includes('/api/v1/dashboard/today')) {
-        return { body: dashboard }
+        return { body: data }
       }
       if (method === 'PATCH' && url.includes('/api/v1/work-items/')) {
         return { body: workItem({}) }
@@ -162,5 +162,38 @@ describe('Today 今日页', () => {
       expect(typeof body.planned_start_at).toBe('string')
       expect(body.planned_start_at).toContain('T09:00:00')
     })
+  })
+
+  it('显示停课与补课状态', async () => {
+    const adjusted: TodayDashboard = {
+      ...dashboard,
+      classes_today: [
+        {
+          course_id: 'c1',
+          course_name: '操作系统',
+          start_time: '08:00',
+          end_time: '09:40',
+          location: '主5#418',
+          open_todos: 0,
+          status: 'cancelled',
+          adjustment_note: '1-2',
+        },
+        {
+          course_id: 'c1',
+          course_name: '操作系统',
+          start_time: '10:00',
+          end_time: '11:40',
+          location: '主5#418',
+          open_todos: 0,
+          status: 'makeup',
+          adjustment_note: '补课 3-4',
+        },
+      ],
+    }
+    stubToday(adjusted)
+    renderPage(<Today />, { route: '/today' })
+
+    expect(await screen.findByText('已停课')).toBeInTheDocument()
+    expect(screen.getByText('补课')).toBeInTheDocument()
   })
 })

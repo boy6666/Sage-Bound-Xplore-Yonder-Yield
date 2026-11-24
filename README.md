@@ -72,6 +72,9 @@ PYTHONPATH=src python -m student_workbench.cli academic login
 # 日常同步：不打开浏览器，用已保存的 Cookie 直接抓课表
 PYTHONPATH=src python -m student_workbench.cli academic sync
 
+# 抓取调停补课记录（同样不打开浏览器，单独一次请求）
+PYTHONPATH=src python -m student_workbench.cli academic adjustments
+
 # 需要作废本机保存的登录状态时
 PYTHONPATH=src python -m student_workbench.cli academic logout
 ```
@@ -81,5 +84,13 @@ PYTHONPATH=src python -m student_workbench.cli academic logout
 Cookie 保存在应用数据目录 `cookies/academic_portal_v1.json`，不进入仓库、不写日志。
 
 解析的是课表网格（`?c=Default&a=Kb`）：表头用 `colspan` 表达周二、周四各占两列，课程格用 `<br>` 分隔“课程名 / 教师 / 教室 / 周次”，单双周与跨节次（`rowspan`）都会被展开。
+
+调停补课页（`?c=Default&a=tbk`）有“调停课”和“补课”两张表，空表显示“当前没有记录”。导入后今日页会叠加显示：
+
+- 被停课的课程标为 `已停课` 并加删除线；
+- 被调课的课程标为 `已调课`；
+- 当天补课的课程会作为额外条目出现，时间由课表页的节次时间换算。
+
+匹配规则是“课程名 + 周次 + 星期”，同一天同一门课有多节时会被一并标记；这是当前已知的精度限制。
 
 界面里的“同步”按钮暂不支持教务平台，会提示改用上面的命令；学习平台仍走 `learning_fake` 流程。

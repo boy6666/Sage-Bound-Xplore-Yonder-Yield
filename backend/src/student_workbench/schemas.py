@@ -380,6 +380,8 @@ class TodayClassOut(BaseModel):
     end_time: str
     location: str | None
     open_todos: int
+    status: str = "normal"
+    adjustment_note: str | None = None
 
 
 class ProjectRiskOut(BaseModel):

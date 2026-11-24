@@ -10,81 +10,20 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from html.parser import HTMLParser
 
-_VOID = {"br", "img", "input", "meta", "link", "hr"}
+from .html_tree import Node as _Node
+from .html_tree import cells as _cells
+from .html_tree import iter_nodes as _iter
+from .html_tree import parse_html
+from .html_tree import span as _span
+from .html_tree import text as _text
+
 _TIME_RE = re.compile(r"(\d{1,2}:\d{2})\s*[-–~]\s*(\d{1,2}:\d{2})")
 _PERIOD_RE = re.compile(r"第(\d{1,2})节|午(\d{1,2})节")
-_WEEK_RANGE_RE = re.compile(r"(\d{1,2})\s*[-–~]\s*(\d{1,2})\s*周(?:\(([^)]*)\)|（([^）]*)）)?")
+_WEEK_RANGE_RE = re.compile(
+    r"(\d{1,2})\s*[-–~]\s*(\d{1,2})\s*周(?:\(([^)]*)\)|（([^）]*)）)?"
+)
 _SINGLE_WEEK_RE = re.compile(r"(\d{1,2})\s*周(?:\(([^)]*)\)|（([^）]*)）)?")
-
-
-class _Node:
-    __slots__ = ("tag", "attrs", "children")
-
-    def __init__(self, tag: str, attrs) -> None:
-        self.tag = tag
-        self.attrs = dict(attrs)
-        self.children: list = []
-
-
-class _TreeBuilder(HTMLParser):
-    def __init__(self) -> None:
-        super().__init__(convert_charrefs=True)
-        self.root = _Node("#root", [])
-        self.stack = [self.root]
-
-    def handle_starttag(self, tag, attrs):
-        node = _Node(tag, attrs)
-        self.stack[-1].children.append(node)
-        if tag not in _VOID:
-            self.stack.append(node)
-
-    def handle_startendtag(self, tag, attrs):
-        self.stack[-1].children.append(_Node(tag, attrs))
-
-    def handle_endtag(self, tag):
-        if tag in _VOID:
-            return
-        for index in range(len(self.stack) - 1, 0, -1):
-            if self.stack[index].tag == tag:
-                del self.stack[index:]
-                return
-
-    def handle_data(self, data):
-        self.stack[-1].children.append(data)
-
-
-def _text(node: _Node) -> str:
-    parts: list[str] = []
-    for child in node.children:
-        if isinstance(child, str):
-            parts.append(child)
-        elif child.tag == "br":
-            parts.append("\n")
-        else:
-            parts.append(_text(child))
-    return "".join(parts)
-
-
-def _iter(node: _Node):
-    for child in node.children:
-        if isinstance(child, _Node):
-            yield child
-            yield from _iter(child)
-
-
-def _cells(tr: _Node) -> list[_Node]:
-    return [c for c in tr.children if isinstance(c, _Node) and c.tag in ("td", "th")]
-
-
-def _span(node: _Node, name: str) -> int:
-    raw = node.attrs.get(name)
-    try:
-        value = int(str(raw).strip())
-    except (TypeError, ValueError):
-        return 1
-    return value if value > 0 else 1
 
 
 @dataclass(frozen=True)
@@ -112,6 +51,7 @@ class ParsedSchedule:
     term_label: str | None
     term_value: str | None
     cells: tuple[ScheduleCell, ...]
+    periods: tuple[tuple[int, str, str], ...] = ()
 
     def courses(self) -> dict[str, ScheduleCell]:
         seen: dict[str, ScheduleCell] = {}
@@ -120,8 +60,8 @@ class ParsedSchedule:
         return seen
 
 
-def _split_brackets(raw: str) -> tuple[str, str | None]:
-    """``软件质量与测试(A)(24软件)(1班)`` -> (name, "A 24软件 1班")."""
+def split_course_class(raw: str) -> tuple[str, str | None]:
+    """``软件质量与测试(A)(24软件)(1班)`` -> ("软件质量与测试", "A 24软件 1班")."""
     match = re.match(r"^(?P<name>[^(（]+)(?P<rest>[（(].*)?$", raw.strip())
     if not match:
         return raw.strip(), None
@@ -132,7 +72,7 @@ def _split_brackets(raw: str) -> tuple[str, str | None]:
     return name, label
 
 
-def _weeks_of(raw: str) -> tuple[list[int], str]:
+def parse_weeks(raw: str) -> tuple[list[int], str]:
     weeks: set[int] = set()
     labels: list[str] = []
     for match in _WEEK_RANGE_RE.finditer(raw):
@@ -166,7 +106,7 @@ def _parse_cell_text(
     if not lines:
         return "", None, None, None, (), ""
 
-    name, class_label = _split_brackets(lines[0])
+    name, class_label = split_course_class(lines[0])
     teacher = lines[1] if len(lines) > 1 else None
     location = lines[2] if len(lines) > 2 else None
     if location and set(location.replace(" ", "")) <= {"-"}:
@@ -174,21 +114,19 @@ def _parse_cell_text(
         location = None
 
     week_source = "\n".join(lines[3:]) if len(lines) > 3 else ""
-    weeks, weeks_label = _weeks_of(week_source)
+    weeks, weeks_label = parse_weeks(week_source)
     if location and ("周" in location and ("周" not in week_source)):
-        weeks, weeks_label = _weeks_of(location)
+        weeks, weeks_label = parse_weeks(location)
         location = lines[2] if len(lines) > 2 else None
 
     return name, class_label, teacher, location, tuple(weeks), weeks_label
 
 
 def parse_kb_html(html: str) -> ParsedSchedule:
-    builder = _TreeBuilder()
-    builder.feed(html)
-    builder.close()
+    root = parse_html(html)
 
     table = None
-    for node in _iter(builder.root):
+    for node in _iter(root):
         if node.tag != "table":
             continue
         classes = str(node.attrs.get("class", ""))
@@ -209,10 +147,10 @@ def parse_kb_html(html: str) -> ParsedSchedule:
         column = 1
         weekday = 1
         for cell in header[1:]:
-            span = _span(cell, "colspan")
-            for offset in range(span):
+            width = _span(cell, "colspan")
+            for offset in range(width):
                 weekday_by_col[column + offset] = weekday
-            column += span
+            column += width
             weekday += 1
 
     grid: dict[tuple[int, int], tuple[_Node, int, int]] = {}
@@ -235,12 +173,16 @@ def parse_kb_html(html: str) -> ParsedSchedule:
                     occupied.add((row_index + dr, column + dc))
             grid[(row_index, column)] = (cell, rowspan, colspan)
             if first_cell:
-                text = _text(cell)
-                period_match = _PERIOD_RE.search(text)
-                time_match = _TIME_RE.search(text)
+                cell_text = _text(cell)
+                period_match = _PERIOD_RE.search(cell_text)
+                time_match = _TIME_RE.search(cell_text)
                 if period_match and time_match:
                     period = int(period_match.group(1) or period_match.group(2))
-                    period_meta[row_index] = (period, time_match.group(1), time_match.group(2))
+                    period_meta[row_index] = (
+                        period,
+                        time_match.group(1),
+                        time_match.group(2),
+                    )
                 first_cell = False
             column += colspan
         row_index += 1
@@ -260,9 +202,7 @@ def parse_kb_html(html: str) -> ParsedSchedule:
         if not raw.strip() or raw.strip() in {"\xa0", "&nbsp;"}:
             continue
         name, class_label, teacher, location, weeks, weeks_label = _parse_cell_text(raw)
-        if not name:
-            continue
-        if row not in period_meta:
+        if not name or row not in period_meta:
             continue
         period_start, start_time, _ = period_meta[row]
         end_row = min(row + rowspan - 1, total_rows - 1)
@@ -285,7 +225,7 @@ def parse_kb_html(html: str) -> ParsedSchedule:
 
     term_label = None
     term_value = None
-    for node in _iter(builder.root):
+    for node in _iter(root):
         if node.tag == "select" and node.attrs.get("id") == "tm_id":
             for option in _iter(node):
                 if option.tag == "option" and "selected" in option.attrs:
@@ -295,4 +235,15 @@ def parse_kb_html(html: str) -> ParsedSchedule:
             break
 
     cells_out.sort(key=lambda c: (c.weekday, c.period_start, c.course_name))
-    return ParsedSchedule(term_label=term_label, term_value=term_value, cells=tuple(cells_out))
+    periods = tuple(
+        (period, start, end)
+        for period, (start, end) in sorted(
+            {value[0]: (value[1], value[2]) for value in period_meta.values()}.items()
+        )
+    )
+    return ParsedSchedule(
+        term_label=term_label,
+        term_value=term_value,
+        cells=tuple(cells_out),
+        periods=periods,
+    )

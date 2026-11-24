@@ -8,15 +8,58 @@ entries that disappeared from the portal are removed for that term only.
 
 from __future__ import annotations
 
+from datetime import date
+
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
+from ..adapters.adjustments_parser import ParsedAdjustments
 from ..adapters.kb_parser import ParsedSchedule, ScheduleCell
-from ..models import Connection, Course, CourseIdentity, CourseScheduleEntry
+from ..models import (
+    Connection,
+    Course,
+    CourseIdentity,
+    CourseScheduleEntry,
+    PeriodTime,
+    ScheduleAdjustment,
+)
 from ..timeutil import utcnow
 from .courses import normalize_name
 
 PROVIDER = "academic_portal_v1"
+
+
+def _term_key(term: str | None) -> str:
+    return term or ""
+
+
+def _parse_date(raw: str | None) -> date | None:
+    if not raw:
+        return None
+    try:
+        return date.fromisoformat(raw.strip())
+    except ValueError:
+        return None
+
+
+def _save_period_times(
+    session: Session, term: str | None, periods: tuple[tuple[int, str, str], ...]
+) -> None:
+    key = _term_key(term)
+    for period, start, end in periods:
+        row = session.scalar(
+            select(PeriodTime).where(
+                PeriodTime.term == key, PeriodTime.period == period
+            )
+        )
+        if row is None:
+            session.add(
+                PeriodTime(term=key, period=period, start_time=start, end_time=end)
+            )
+        else:
+            row.start_time = start
+            row.end_time = end
+    session.flush()
 
 
 def _find_course(session: Session, name: str, term: str | None) -> Course | None:
@@ -36,6 +79,8 @@ def _entry_external_id(course_external_id: str, cell: ScheduleCell) -> str:
 def import_schedule(
     session: Session, connection: Connection, parsed: ParsedSchedule
 ) -> dict[str, int]:
+    _save_period_times(session, parsed.term_label, parsed.periods)
+
     created_courses = 0
     created_identities = 0
     upserted_entries = 0
@@ -137,4 +182,64 @@ def import_schedule(
         "created_identities": created_identities,
         "entries": upserted_entries,
         "removed_entries": removed,
+    }
+
+
+def import_adjustments(
+    session: Session, connection: Connection, parsed: ParsedAdjustments
+) -> dict[str, int]:
+    created = 0
+    seen: set[str] = set()
+
+    for record in parsed.records:
+        row = session.scalar(
+            select(ScheduleAdjustment).where(
+                ScheduleAdjustment.connection_id == connection.id,
+                ScheduleAdjustment.external_id == record.external_id,
+            )
+        )
+        if row is None:
+            row = ScheduleAdjustment(
+                connection_id=connection.id,
+                external_id=record.external_id,
+                kind=record.kind,
+                term=parsed.term_label,
+                course_name=record.course_name,
+                course_class=record.course_class,
+            )
+            session.add(row)
+            created += 1
+
+        course = _find_course(session, record.course_name, parsed.term_label)
+        row.kind = record.kind
+        row.term = parsed.term_label
+        row.course_id = course.id if course else None
+        row.course_name = record.course_name
+        row.course_class = record.course_class
+        row.teacher = record.teacher
+        row.week = record.week
+        row.weekday = record.weekday
+        row.period_label = record.period_label
+        row.period_start = record.period_start
+        row.period_end = record.period_end
+        row.adjusted_on = _parse_date(record.date)
+        row.room = record.room
+        seen.add(record.external_id)
+
+    removed = 0
+    for row in session.scalars(
+        select(ScheduleAdjustment).where(
+            ScheduleAdjustment.connection_id == connection.id
+        )
+    ).all():
+        if row.external_id not in seen:
+            session.delete(row)
+            removed += 1
+
+    connection.last_sync_at = utcnow()
+    session.flush()
+    return {
+        "records": len(parsed.records),
+        "created": created,
+        "removed": removed,
     }

@@ -150,6 +150,61 @@ class CourseScheduleEntry(Base):
     )
 
 
+class PeriodTime(Base):
+    """Period number to clock time, captured from the schedule grid header column."""
+
+    __tablename__ = "period_times"
+    __table_args__ = (
+        UniqueConstraint("term", "period", name="uq_period_time_term_period"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    term: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    period: Mapped[int] = mapped_column(Integer, nullable=False)
+    start_time: Mapped[str] = mapped_column(String(5), nullable=False)
+    end_time: Mapped[str] = mapped_column(String(5), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+
+
+class ScheduleAdjustment(Base):
+    """A 调课 / 停课 / 补课 record from the portal's 调停补课信息 page."""
+
+    __tablename__ = "schedule_adjustments"
+    __table_args__ = (
+        UniqueConstraint(
+            "connection_id", "external_id", name="uq_adjustment_connection_external"
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    connection_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("connections.id"), nullable=False, index=True
+    )
+    course_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("courses.id"), index=True
+    )
+    external_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    term: Mapped[str | None] = mapped_column(String(64))
+    course_name: Mapped[str] = mapped_column(String(300), nullable=False)
+    course_class: Mapped[str] = mapped_column(String(300), nullable=False)
+    teacher: Mapped[str | None] = mapped_column(String(200))
+    week: Mapped[int | None] = mapped_column(Integer)
+    weekday: Mapped[int | None] = mapped_column(Integer)
+    period_label: Mapped[str | None] = mapped_column(String(32))
+    period_start: Mapped[int | None] = mapped_column(Integer)
+    period_end: Mapped[int | None] = mapped_column(Integer)
+    adjusted_on: Mapped[date | None] = mapped_column(Date)
+    room: Mapped[str | None] = mapped_column(String(200))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+
+
 class Project(Base):
     __tablename__ = "projects"
 

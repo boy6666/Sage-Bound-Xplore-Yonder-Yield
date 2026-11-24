@@ -5,6 +5,7 @@ from __future__ import annotations
 import httpx
 
 DEFAULT_KB_URL = "http://jw.xujc.com/student/index.php?c=Default&a=Kb"
+DEFAULT_TBK_URL = "http://jw.xujc.com/student/index.php?c=Default&a=tbk"
 DEFAULT_LOGIN_URL = "http://jw.xujc.com/student/index.php"
 
 USER_AGENT = (
@@ -28,14 +29,13 @@ def classify(html: str) -> str:
     return STATE_UNKNOWN
 
 
-def fetch_schedule_html(
+def _fetch(
+    url: str,
     cookie_jar: dict[str, str],
     *,
-    kb_url: str = DEFAULT_KB_URL,
-    login_url: str = DEFAULT_LOGIN_URL,
-    timeout: float = 25.0,
+    login_url: str,
+    timeout: float,
 ) -> str:
-    """Return the schedule page HTML, or ``""`` when the session is no longer valid."""
     headers = {
         "User-Agent": USER_AGENT,
         "Referer": login_url,
@@ -48,9 +48,34 @@ def fetch_schedule_html(
         timeout=timeout,
         follow_redirects=True,
     ) as client:
-        response = client.get(kb_url)
+        response = client.get(url)
         response.raise_for_status()
-        html = response.text
+        return response.text
+
+
+def fetch_schedule_html(
+    cookie_jar: dict[str, str],
+    *,
+    kb_url: str = DEFAULT_KB_URL,
+    login_url: str = DEFAULT_LOGIN_URL,
+    timeout: float = 25.0,
+) -> str:
+    """Return the schedule page HTML, or ``""`` when the session is no longer valid."""
+    html = _fetch(kb_url, cookie_jar, login_url=login_url, timeout=timeout)
     if classify(html) == STATE_LOGIN:
+        return ""
+    return html
+
+
+def fetch_adjustments_html(
+    cookie_jar: dict[str, str],
+    *,
+    tbk_url: str = DEFAULT_TBK_URL,
+    login_url: str = DEFAULT_LOGIN_URL,
+    timeout: float = 25.0,
+) -> str:
+    """Return the 调停补课 page HTML, or ``""`` when the session is no longer valid."""
+    html = _fetch(tbk_url, cookie_jar, login_url=login_url, timeout=timeout)
+    if LOGIN_MARKER in html:
         return ""
     return html
