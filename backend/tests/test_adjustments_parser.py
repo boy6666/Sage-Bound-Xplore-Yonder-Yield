@@ -87,3 +87,26 @@ def test_empty_tables_are_a_definite_empty_list():
 def test_missing_tables_raise():
     with pytest.raises(ValueError):
         parse_adjustments_html("<html><body><p>不是这个页面</p></body></html>")
+
+
+NOON_PAGE = """
+<html><body>
+<h3>调停补课信息 - 2026-2027学年第一学期</h3>
+<table class="data small" id="data_table">
+  <thead><tr><th>序号</th><th>类型</th><th>课程班名称</th><th>教师</th>
+  <th>调/停课周</th><th>星期</th><th>节次</th><th>调/停课日期</th><th>教室</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td>调课</td><td>编译原理(24软件)(1班)</td><td>赵老师</td>
+    <td>6</td><td>周五</td><td>午1-午2</td><td>2026-10-23</td><td>主2#109</td></tr>
+  </tbody>
+</table>
+</body></html>
+"""
+
+
+def test_noon_period_does_not_collide_with_morning():
+    parsed = parse_adjustments_html(NOON_PAGE)
+    record = parsed.records[0]
+    assert record.period_label == "午1-午2"
+    assert (record.period_start, record.period_end) == (101, 102)
+    assert record.weekday == 5

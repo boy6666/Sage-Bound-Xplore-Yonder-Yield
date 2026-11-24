@@ -95,7 +95,7 @@ def test_cancelled_class_is_marked(session_factory):
     assert missing is False
     assert len(result) == 1
     assert result[0]["status"] == "cancelled"
-    assert result[0]["adjustment_note"] == "1-2"
+    assert result[0]["adjustment_note"] == "1-2节 08:00-09:40"
 
 
 def test_moved_class_is_marked(session_factory):

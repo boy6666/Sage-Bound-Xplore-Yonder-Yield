@@ -73,15 +73,41 @@ def classify_items(
     }
 
 
-def _match_adjustment(course_name: str, adjustments: list) -> tuple[str, str | None]:
+def _period_clock(
+    adjustment, period_times: dict[int, tuple[str, str]]
+) -> str | None:
+    start = period_times.get(adjustment.period_start or 0)
+    end = period_times.get(adjustment.period_end or adjustment.period_start or 0)
+    if start and end:
+        return f"{start[0]}-{end[1]}"
+    return None
+
+
+def _period_detail(adjustment, period_times: dict[int, tuple[str, str]]) -> str:
+    label = adjustment.period_label or ""
+    clock = _period_clock(adjustment, period_times)
+    parts = [f"{label}节" if label else "", clock or ""]
+    return " ".join(part for part in parts if part).strip()
+
+
+def _adjustment_note(
+    adjustment, period_times: dict[int, tuple[str, str]]
+) -> str:
+    return _period_detail(adjustment, period_times) or (
+        "停课" if adjustment.kind == "cancel" else "调课"
+    )
+
+
+def _match_adjustment(
+    course_name: str, adjustments: list, period_times: dict[int, tuple[str, str]]
+) -> tuple[str, str | None]:
     for adjustment in adjustments:
         if adjustment.kind == "makeup":
             continue
         if normalize_name(adjustment.course_name) != normalize_name(course_name):
             continue
-        if adjustment.kind == "cancel":
-            return "cancelled", adjustment.period_label or "停课"
-        return "moved", adjustment.period_label or "调课"
+        state = "cancelled" if adjustment.kind == "cancel" else "moved"
+        return state, _adjustment_note(adjustment, period_times)
     return "normal", None
 
 
@@ -123,7 +149,7 @@ def classes_today(
         course = session.get(Course, entry.course_id)
         if course is None:
             continue
-        status, note = _match_adjustment(course.name, day_adjustments)
+        status, note = _match_adjustment(course.name, day_adjustments, period_times)
         result.append(
             {
                 "course_id": course.id,
@@ -156,7 +182,9 @@ def classes_today(
                     else 0
                 ),
                 "status": "makeup",
-                "adjustment_note": f"补课 {adjustment.period_label or ''}".strip(),
+                "adjustment_note": (
+                    f"补课 {_period_detail(adjustment, period_times)}".strip()
+                ),
             }
         )
 

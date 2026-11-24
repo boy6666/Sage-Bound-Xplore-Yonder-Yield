@@ -94,13 +94,27 @@ def _parse_week(raw: str) -> int | None:
     return int(match.group()) if match else None
 
 
+def _period_index(token: str) -> int | None:
+    """``午2`` -> 102, ``第3``/``3`` -> 3, so 午间节次 never collides with 上午."""
+    token = token.strip()
+    noon = re.fullmatch(r"午\s*(\d{1,2})", token)
+    if noon:
+        return 100 + int(noon.group(1))
+    plain = re.fullmatch(r"(?:第)?\s*(\d{1,2})", token)
+    if plain:
+        return int(plain.group(1))
+    return None
+
+
 def _parse_period(raw: str) -> tuple[str | None, int | None, int | None]:
-    numbers = re.findall(r"\d{1,2}", raw)
-    if not numbers:
-        return (raw or None), None, None
-    start = int(numbers[0])
-    end = int(numbers[1]) if len(numbers) > 1 else start
-    return raw.strip(), start, end
+    text = raw.strip()
+    if not text:
+        return None, None, None
+    parts = [part for part in re.split(r"[-–~至]", text) if part.strip()]
+    if len(parts) >= 2:
+        return text, _period_index(parts[0]), _period_index(parts[1])
+    single = _period_index(parts[0])
+    return text, single, single
 
 
 def _kind_of(raw: str, default: str) -> str:

@@ -19,7 +19,12 @@ from .html_tree import span as _span
 from .html_tree import text as _text
 
 _TIME_RE = re.compile(r"(\d{1,2}:\d{2})\s*[-–~]\s*(\d{1,2}:\d{2})")
-_PERIOD_RE = re.compile(r"第(\d{1,2})节|午(\d{1,2})节")
+_PERIOD_RE = re.compile(r"(第|午)(\d{1,2})节")
+
+
+def period_number(prefix: str, number: int) -> int:
+    """Number periods so that 午1 does not collide with 第1 (offset by 100)."""
+    return number + 100 if prefix == "午" else number
 _WEEK_RANGE_RE = re.compile(
     r"(\d{1,2})\s*[-–~]\s*(\d{1,2})\s*周(?:\(([^)]*)\)|（([^）]*)）)?"
 )
@@ -177,7 +182,9 @@ def parse_kb_html(html: str) -> ParsedSchedule:
                 period_match = _PERIOD_RE.search(cell_text)
                 time_match = _TIME_RE.search(cell_text)
                 if period_match and time_match:
-                    period = int(period_match.group(1) or period_match.group(2))
+                    period = period_number(
+                        period_match.group(1), int(period_match.group(2))
+                    )
                     period_meta[row_index] = (
                         period,
                         time_match.group(1),

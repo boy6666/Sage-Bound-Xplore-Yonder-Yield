@@ -56,6 +56,13 @@ def test_rowspan_extends_end_time(parsed):
     assert (late.period_start, late.period_end) == (3, 4)
 
 
+def test_noon_period_is_offset(parsed):
+    by_name = {cell.course_name: cell for cell in parsed.cells}
+    noon = by_name["Linux操作系统应用"]
+    assert (noon.start_time, noon.end_time) == ("12:30", "14:05")
+    assert (noon.period_start, noon.period_end) == (101, 102)
+
+
 def test_odd_even_weeks(parsed):
     by_name = {cell.course_name: cell for cell in parsed.cells}
     assert by_name["操作系统"].weeks == (1, 3, 5, 7, 9, 11, 13, 15)
