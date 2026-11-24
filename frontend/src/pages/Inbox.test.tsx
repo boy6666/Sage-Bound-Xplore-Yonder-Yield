@@ -125,4 +125,35 @@ describe('Inbox 统一收件箱', () => {
       ),
     ).toBe(false)
   })
+
+  it('输入时保持焦点，连续字符和中文不会被吞掉', async () => {
+    stubFetch([
+      (url, _init, method) => {
+        if (method === 'GET' && url.includes('/api/v1/work-items')) {
+          return { body: { items: [] } }
+        }
+        if (method === 'GET' && url.includes('/api/v1/courses')) {
+          return { body: { items: [] } }
+        }
+        if (method === 'GET' && url.includes('/api/v1/projects')) {
+          return { body: { items: [] } }
+        }
+        return null
+      },
+    ])
+
+    const user = userEvent.setup()
+    renderPage(<Inbox />, { route: '/inbox' })
+    await screen.findByText('没有符合条件的事项')
+
+    await user.click(screen.getAllByRole('button', { name: '新建事项' })[0])
+    const input = await screen.findByLabelText(/标题/)
+    await user.click(input)
+    await user.type(input, '操作系统实验二')
+
+    expect(input).toHaveValue('操作系统实验二')
+    // Regression: the modal used to re-run its focus effect on every parent
+    // render, pulling focus to the dialog panel after the first keystroke.
+    expect(document.activeElement).toBe(input)
+  })
 })

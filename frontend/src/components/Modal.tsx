@@ -20,22 +20,32 @@ export function Modal({
   widthClass = 'max-w-lg',
 }: ModalProps) {
   const panelRef = useRef<HTMLDivElement>(null)
+  const onCloseRef = useRef(onClose)
+
+  // Keep the latest handler without re-running the effects below: `onClose` is
+  // usually an inline arrow recreated on every parent render (e.g. while typing),
+  // and re-running the focus effect would steal focus from the active input.
+  useEffect(() => {
+    onCloseRef.current = onClose
+  })
 
   useEffect(() => {
     if (!open) return
     const handleKey = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
         event.stopPropagation()
-        onClose()
+        onCloseRef.current()
       }
     }
     document.addEventListener('keydown', handleKey)
+    return () => document.removeEventListener('keydown', handleKey)
+  }, [open])
+
+  useEffect(() => {
+    if (!open) return
     const timer = window.setTimeout(() => panelRef.current?.focus(), 0)
-    return () => {
-      document.removeEventListener('keydown', handleKey)
-      window.clearTimeout(timer)
-    }
-  }, [open, onClose])
+    return () => window.clearTimeout(timer)
+  }, [open])
 
   if (!open) return null
 
