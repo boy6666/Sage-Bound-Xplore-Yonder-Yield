@@ -2,7 +2,13 @@ from __future__ import annotations
 
 from datetime import UTC, date, datetime, timedelta
 
-from student_workbench.models import Course, WorkItem
+from student_workbench.models import (
+    Connection,
+    Course,
+    CourseIdentity,
+    CourseScheduleEntry,
+    WorkItem,
+)
 from student_workbench.services.courses import schedule_payload
 from student_workbench.services.settings import get_settings_row
 from student_workbench.timeutil import get_tz
@@ -113,6 +119,50 @@ def test_items_are_empty_without_term_start(session_factory):
 
     assert payload["items"] == []
     assert payload["week_start"] is None
+
+
+def test_default_view_returns_only_the_current_week(session_factory):
+    with session_factory() as session:
+        course = _seed(session)
+        connection = Connection(
+            kind="academic",
+            provider="academic_portal_v1",
+            display_name="教务",
+            status="ready",
+        )
+        session.add(connection)
+        session.flush()
+        identity = CourseIdentity(
+            connection_id=connection.id,
+            course_id=course.id,
+            platform="academic",
+            provider="academic_portal_v1",
+            external_id="op|1",
+            external_name="操作系统",
+            match_status="manual",
+        )
+        session.add(identity)
+        session.flush()
+        session.add(
+            CourseScheduleEntry(
+                connection_id=connection.id,
+                identity_id=identity.id,
+                course_id=course.id,
+                external_id="e1",
+                weekday=1,
+                start_time="08:00",
+                end_time="09:40",
+                weeks=[2],
+                weeks_label="2周",
+            )
+        )
+        session.commit()
+
+        default_payload = schedule_payload(session, TZ, current_week=12)
+        week_payload = schedule_payload(session, TZ, week=2)
+
+    assert default_payload["entries"] == []
+    assert len(week_payload["entries"]) == 1
 
 
 def test_explicit_week_start_overrides_term_start(session_factory):

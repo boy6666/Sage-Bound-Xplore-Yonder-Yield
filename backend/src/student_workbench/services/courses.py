@@ -229,8 +229,6 @@ def schedule_payload(
             CourseScheduleEntry.id,
         )
     ).all()
-    if week is not None:
-        entries = [entry for entry in entries if week in (entry.weeks or [])]
 
     computed_week = None
     if term_start is not None:
@@ -239,6 +237,13 @@ def schedule_payload(
         if delta_days >= 0:
             computed_week = delta_days // 7 + 1
     resolved_week = current_week if current_week is not None else computed_week
+
+    # Default view is the current week only; other weeks are requested explicitly.
+    effective_week = week if week is not None else resolved_week
+    if effective_week is not None:
+        entries = [
+            entry for entry in entries if effective_week in (entry.weeks or [])
+        ]
 
     target_start = week_start
     if target_start is None and term_start is not None:
