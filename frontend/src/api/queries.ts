@@ -495,3 +495,24 @@ export function useUpdateSettings() {
     },
   })
 }
+
+export function useSaveGithubToken() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (token: string) =>
+      api.put<{ saved: boolean }>('/settings/github-token', { token }),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: settingsKeys.all })
+    },
+  })
+}
+
+export function useDeleteGithubToken() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: () => api.delete('/settings/github-token'),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: settingsKeys.all })
+    },
+  })
+}

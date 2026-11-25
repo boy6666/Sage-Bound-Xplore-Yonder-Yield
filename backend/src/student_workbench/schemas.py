@@ -387,6 +387,15 @@ class SettingsOut(BaseModel):
     inactive_days: int
     save_platform_password: bool
     term_start_date: str | None
+    github_token_saved: bool = False
+
+
+class GithubTokenIn(BaseModel):
+    token: str = Field(min_length=1, max_length=255)
+
+
+class GithubTokenOut(BaseModel):
+    saved: bool
 
 
 class BootstrapOut(BaseModel):

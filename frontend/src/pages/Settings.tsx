@@ -1,5 +1,10 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { useSettings, useUpdateSettings } from '../api/queries'
+import {
+  useDeleteGithubToken,
+  useSaveGithubToken,
+  useSettings,
+  useUpdateSettings,
+} from '../api/queries'
 import { ErrorState } from '../components/ErrorState'
 import { Field } from '../components/Field'
 import { TIMEZONE_OPTIONS } from '../lib/date'
@@ -8,6 +13,8 @@ import { errorMessage } from '../lib/format'
 export function Settings() {
   const settingsQuery = useSettings()
   const updateSettings = useUpdateSettings()
+  const saveToken = useSaveGithubToken()
+  const deleteToken = useDeleteGithubToken()
 
   const [timezone, setTimezone] = useState('Asia/Shanghai')
   const [upcomingDays, setUpcomingDays] = useState('7')
@@ -17,6 +24,9 @@ export function Settings() {
   const [termStart, setTermStart] = useState('')
   const [formError, setFormError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
+  const [token, setToken] = useState('')
+  const [tokenError, setTokenError] = useState<unknown>(null)
+  const [tokenMessage, setTokenMessage] = useState<string | null>(null)
 
   useEffect(() => {
     if (!settingsQuery.data) return
@@ -63,6 +73,31 @@ export function Settings() {
       },
       { onSuccess: () => setSaved(true) },
     )
+  }
+
+  const handleSaveToken = (): void => {
+    setTokenError(null)
+    setTokenMessage(null)
+    if (!token.trim()) {
+      setTokenError(new Error('令牌不能为空。'))
+      return
+    }
+    saveToken.mutate(token.trim(), {
+      onSuccess: () => {
+        setToken('')
+        setTokenMessage('令牌已保存到系统凭据库。')
+      },
+      onError: (error) => setTokenError(error),
+    })
+  }
+
+  const handleDeleteToken = (): void => {
+    setTokenError(null)
+    setTokenMessage(null)
+    deleteToken.mutate(undefined, {
+      onSuccess: () => setTokenMessage('令牌已清除。'),
+      onError: (error) => setTokenError(error),
+    })
   }
 
   if (settingsQuery.isPending) {
@@ -221,6 +256,72 @@ export function Settings() {
           </p>
         </div>
       </form>
+
+      <section className="card card-pad space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold text-ink">GitHub 访问令牌</h2>
+          <span
+            className={`chip ${
+              settingsQuery.data.github_token_saved
+                ? 'bg-emerald-500/10 text-emerald-300 ring-emerald-500/30'
+                : 'bg-surface-2 text-muted ring-edge'
+            }`}
+          >
+            {settingsQuery.data.github_token_saved ? '已保存' : '未配置'}
+          </span>
+        </div>
+        <p className="text-xs text-muted">
+          用于读取私有仓库的 Issue、PR 和 CI 状态。令牌只写入当前 OS
+          账户的系统凭据库，不会回显，也不会进入 SQLite、日志或 Git。
+        </p>
+        <div className="flex flex-wrap items-end gap-2">
+          <div className="min-w-[260px] flex-1">
+            <Field
+              label="令牌"
+              htmlFor="settings-github-token"
+              hint="只需要 repo 只读权限；不确定时先用公开仓库验证。"
+            >
+              <input
+                id="settings-github-token"
+                className="input"
+                type="password"
+                value={token}
+                onChange={(event) => setToken(event.target.value)}
+                placeholder="ghp_..."
+                autoComplete="off"
+              />
+            </Field>
+          </div>
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={saveToken.isPending || !token.trim()}
+            onClick={handleSaveToken}
+          >
+            {saveToken.isPending ? '正在保存…' : '保存令牌'}
+          </button>
+          {settingsQuery.data.github_token_saved ? (
+            <button
+              type="button"
+              className="btn btn-ghost"
+              disabled={deleteToken.isPending}
+              onClick={handleDeleteToken}
+            >
+              清除
+            </button>
+          ) : null}
+        </div>
+        {tokenMessage ? (
+          <p role="status" className="text-sm text-emerald-300">
+            {tokenMessage}
+          </p>
+        ) : null}
+        {tokenError ? (
+          <p role="alert" className="text-sm text-rose-300">
+            {errorMessage(tokenError)}
+          </p>
+        ) : null}
+      </section>
     </div>
   )
 }

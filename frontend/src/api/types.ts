@@ -251,6 +251,7 @@ export interface Settings {
   inactive_days: number
   save_platform_password: boolean
   term_start_date: string | null
+  github_token_saved: boolean
 }
 
 export interface TodayClass {
