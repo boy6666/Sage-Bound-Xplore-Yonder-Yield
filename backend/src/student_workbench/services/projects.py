@@ -230,10 +230,11 @@ def _check_repo_path(path: str | None) -> str | None:
 def create_project(session: Session, payload: ProjectCreate) -> Project:
     status = payload.status
     repo_path = _check_repo_path(payload.repo_path)
-    if status in REASON_REQUIRED_STATUSES:
+    reason = (payload.status_reason or "").strip() or None
+    if status in REASON_REQUIRED_STATUSES and reason is None:
         raise AppError(
             "PROJECT_STATUS_REASON_REQUIRED",
-            "受阻状态必须填写原因",
+            "受阻、等待、暂停或取消状态必须填写原因",
             422,
             {"status": status},
         )
@@ -242,6 +243,7 @@ def create_project(session: Session, payload: ProjectCreate) -> Project:
         name=payload.name,
         description=payload.description,
         status=status,
+        status_reason=reason,
         status_changed_at=now,
         repo_path=repo_path,
         created_at=now,
@@ -249,7 +251,7 @@ def create_project(session: Session, payload: ProjectCreate) -> Project:
     )
     session.add(project)
     session.flush()
-    _append_history(session, project, None, status, None, now)
+    _append_history(session, project, None, status, reason, now)
     session.flush()
     return project
 

@@ -245,7 +245,7 @@ export function ProjectDetail() {
       id: item.id,
       patch: {
         status: 'planned',
-        planned_start_at: isoWithOffset(new Date(`${value}T09:00:00`)),
+        planned_start_at: isoWithOffset(new Date(value)),
       },
     })
   }
@@ -563,11 +563,11 @@ export function ProjectDetail() {
                   }
                 />
                 <div className="flex flex-wrap items-center gap-2 pl-1 text-xs text-muted">
-                  <label htmlFor={`plan-date-${item.id}`}>计划到某天</label>
+                  <label htmlFor={`plan-date-${item.id}`}>计划时间</label>
                   <input
                     id={`plan-date-${item.id}`}
-                    className="input w-36 py-1 text-xs"
-                    type="date"
+                    className="input w-52 py-1 text-xs"
+                    type="datetime-local"
                     value={planDates[item.id] ?? ''}
                     onChange={(event) =>
                       setPlanDates((current) => ({ ...current, [item.id]: event.target.value }))

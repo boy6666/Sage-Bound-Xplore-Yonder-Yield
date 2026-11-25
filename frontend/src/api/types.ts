@@ -332,6 +332,7 @@ export interface ProjectInput {
   name: string
   description?: string | null
   status?: ProjectStatus
+  status_reason?: string | null
   repo_path?: string | null
 }
 

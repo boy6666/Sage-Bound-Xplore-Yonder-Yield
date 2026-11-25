@@ -11,6 +11,7 @@ import {
   PROJECT_STATUS_LABELS,
   PROJECT_STATUS_OPTIONS,
   errorMessage,
+  requiresStatusReason,
 } from '../lib/format'
 
 export function Projects() {
@@ -24,6 +25,7 @@ export function Projects() {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [newStatus, setNewStatus] = useState<ProjectStatus>('planning')
+  const [statusReason, setStatusReason] = useState('')
   const [repoPath, setRepoPath] = useState('')
   const [formError, setFormError] = useState<string | null>(null)
 
@@ -31,6 +33,7 @@ export function Projects() {
     setName('')
     setDescription('')
     setNewStatus('planning')
+    setStatusReason('')
     setRepoPath('')
     setFormError(null)
     createProject.reset()
@@ -47,12 +50,20 @@ export function Projects() {
       setFormError('项目名称不能为空。')
       return
     }
+    if (requiresStatusReason(newStatus) && !statusReason.trim()) {
+      setFormError('受阻、等待、暂停或取消状态必须填写原因。')
+      return
+    }
     setFormError(null)
     createProject.mutate(
       {
         name: name.trim(),
         description: description.trim() === '' ? null : description.trim(),
         status: newStatus,
+        status_reason:
+          requiresStatusReason(newStatus) && statusReason.trim()
+            ? statusReason.trim()
+            : null,
         repo_path: repoPath.trim() === '' ? null : repoPath.trim(),
       },
       {
@@ -183,6 +194,23 @@ export function Projects() {
               />
             </Field>
           </div>
+
+          {requiresStatusReason(newStatus) ? (
+            <Field
+              label="状态原因"
+              htmlFor="project-status-reason"
+              required
+              hint="说明为什么处于该状态，会记录到状态历史。"
+            >
+              <textarea
+                id="project-status-reason"
+                className="input min-h-16"
+                value={statusReason}
+                onChange={(event) => setStatusReason(event.target.value)}
+                placeholder="例如：目前没有精力继续"
+              />
+            </Field>
+          ) : null}
 
           {formError ? (
             <p role="alert" className="text-sm text-rose-300">

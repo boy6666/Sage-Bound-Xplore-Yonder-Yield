@@ -61,6 +61,7 @@ class ProjectCreate(BaseModel):
     name: str = Field(min_length=1, max_length=300)
     description: str | None = None
     status: ProjectStatus = "planning"
+    status_reason: str | None = None
     repo_path: str | None = None
 
 
