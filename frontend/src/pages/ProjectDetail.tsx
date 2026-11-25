@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import type { Milestone, ProjectStatus, WorkItem } from '../api/types'
+import type { Milestone, Priority, ProjectStatus, WorkItem } from '../api/types'
 import {
   useAddMilestone,
   useAddProjectTodo,
@@ -19,6 +19,8 @@ import { WorkItemRow } from '../components/WorkItemRow'
 import { formatDate, formatDateTime, isoWithOffset, localInputToISO, planTodayISO } from '../lib/date'
 import {
   HEALTH_DESCRIPTIONS,
+  PRIORITY_LABELS,
+  PRIORITY_ORDER,
   PROJECT_STATUS_LABELS,
   PROJECT_STATUS_OPTIONS,
   errorMessage,
@@ -98,6 +100,7 @@ export function ProjectDetail() {
   const [milestoneError, setMilestoneError] = useState<string | null>(null)
 
   const [todoTitle, setTodoTitle] = useState('')
+  const [todoPriority, setTodoPriority] = useState<Priority>('normal')
   const [todoDue, setTodoDue] = useState('')
   const [todoPlanned, setTodoPlanned] = useState('')
   const [todoError, setTodoError] = useState<string | null>(null)
@@ -218,6 +221,7 @@ export function ProjectDetail() {
         projectId: current.id,
         input: {
           title: todoTitle.trim(),
+          priority: todoPriority,
           due_at: localInputToISO(todoDue),
           planned_start_at: localInputToISO(todoPlanned),
           status: todoPlanned ? 'planned' : 'inbox',
@@ -226,6 +230,7 @@ export function ProjectDetail() {
       {
         onSuccess: () => {
           setTodoTitle('')
+          setTodoPriority('normal')
           setTodoDue('')
           setTodoPlanned('')
         },
@@ -480,7 +485,7 @@ export function ProjectDetail() {
           <p className="text-xs text-muted">{data.todos.length} 项</p>
         </div>
         <form className="space-y-3" onSubmit={handleTodoSubmit}>
-          <div className="grid gap-3 md:grid-cols-3">
+          <div className="grid gap-3 md:grid-cols-4">
             <Field label="待办标题" htmlFor="todo-title" required>
               <input
                 id="todo-title"
@@ -489,6 +494,20 @@ export function ProjectDetail() {
                 onChange={(event) => setTodoTitle(event.target.value)}
                 placeholder="例如：补全今日页空状态"
               />
+            </Field>
+            <Field label="优先级" htmlFor="todo-priority">
+              <select
+                id="todo-priority"
+                className="input"
+                value={todoPriority}
+                onChange={(event) => setTodoPriority(event.target.value as Priority)}
+              >
+                {PRIORITY_ORDER.map((value) => (
+                  <option key={value} value={value}>
+                    {PRIORITY_LABELS[value]}
+                  </option>
+                ))}
+              </select>
             </Field>
             <Field label="截止时间" htmlFor="todo-due">
               <input
