@@ -50,14 +50,14 @@ def test_scan_invalid_path_returns_422(client, tmp_path):
     assert response.json()["error"]["code"] == "REPO_PATH_INVALID"
 
 
-def test_scan_non_git_directory_returns_422(client, tmp_path):
+def test_non_git_directory_is_accepted(client, tmp_path):
     plain = tmp_path / "plain"
     plain.mkdir()
     response = client.post(
         "/api/v1/projects", json={"name": "非仓库", "repo_path": str(plain)}
     )
-    assert response.status_code == 422
-    assert response.json()["error"]["code"] == "REPO_PATH_INVALID"
+    assert response.status_code == 201
+    assert response.json()["repo_path"] == str(plain)
 
 
 def test_scan_reports_branch_and_counts(client, tmp_path):
@@ -132,7 +132,7 @@ def test_scan_reports_ahead_and_behind_with_upstream(client, tmp_path):
     assert snapshot["behind"] == 1
 
 
-def test_scan_failure_stores_error_snapshot(client, tmp_path):
+def test_repo_losing_git_falls_back_to_no_git(client, tmp_path):
     repo = init_repo(tmp_path / "repo")
     project = create_project(client, name="仓库", repo_path=str(repo))
     client.patch(
@@ -145,10 +145,9 @@ def test_scan_failure_stores_error_snapshot(client, tmp_path):
     response = client.post(f"/api/v1/projects/{project['id']}/scan")
     assert response.status_code == 200, response.text
     snapshot = response.json()["snapshot"]
-    assert snapshot["state"] == "error"
-    assert snapshot["error"]
+    assert snapshot["state"] == "no_git"
     assert response.json()["health"]["level"] == "unknown"
 
     detail = client.get(f"/api/v1/projects/{project['id']}").json()
-    assert detail["repo_snapshot"]["state"] == "error"
+    assert detail["repo_snapshot"]["state"] == "no_git"
     assert detail["project"]["health"]["level"] == "unknown"

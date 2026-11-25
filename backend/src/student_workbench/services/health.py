@@ -95,6 +95,15 @@ def compute_health(inputs: HealthInputs) -> dict:
                     "repo",
                 )
             )
+        elif snapshot.get("state") == "no_git":
+            unknown.append(
+                _reason(
+                    "REPO_NOT_GIT",
+                    "目录未纳入 Git",
+                    "项目照常管理，但没有版本控制信息",
+                    "repo",
+                )
+            )
         elif snapshot.get("state") != "ok":
             unknown.append(
                 _reason(

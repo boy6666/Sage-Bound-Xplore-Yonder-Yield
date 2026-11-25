@@ -90,6 +90,13 @@ def remote_url(path: Path) -> str | None:
     return value or None
 
 
+def is_git_repo(path: Path) -> bool:
+    try:
+        return _run(path, ["rev-parse", "--is-inside-work-tree"]).strip() == "true"
+    except ScanError:
+        return False
+
+
 def scan_repo(path: Path) -> dict:
     branch: str | None = None
     try:

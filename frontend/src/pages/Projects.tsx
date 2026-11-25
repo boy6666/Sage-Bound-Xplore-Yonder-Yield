@@ -169,7 +169,11 @@ export function Projects() {
                 ))}
               </select>
             </Field>
-            <Field label="本地仓库路径" htmlFor="project-repo" hint="可稍后在详情页补充。">
+            <Field
+              label="本地仓库路径"
+              htmlFor="project-repo"
+              hint="可稍后在详情页补充；没有 Git 的目录也可以。"
+            >
               <input
                 id="project-repo"
                 className="input"

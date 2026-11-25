@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import delete, select, update
@@ -25,7 +26,6 @@ from ..timeutil import (
     utcnow,
 )
 from .health import HealthInputs, compute_health
-from .repo_scanner import validate_repo_path
 from .settings import current_tz, get_settings_row
 from .work_items import ACTIVE_STATUSES, open_count, serialize_item
 
@@ -208,10 +208,23 @@ def _append_history(
 
 
 def _check_repo_path(path: str | None) -> str | None:
+    """Accept any existing directory; Git is optional for a project."""
     if not path:
         return None
-    validate_repo_path(path)
-    return path
+    candidate = path.strip()
+    if not candidate:
+        return None
+    try:
+        exists = Path(candidate).is_dir()
+    except (OSError, ValueError) as exc:
+        raise AppError(
+            "REPO_PATH_INVALID", "仓库路径不合法", 422, {"repo_path": path}
+        ) from exc
+    if not exists:
+        raise AppError(
+            "REPO_PATH_INVALID", "目录不存在", 422, {"repo_path": path}
+        )
+    return candidate
 
 
 def create_project(session: Session, payload: ProjectCreate) -> Project:
@@ -419,12 +432,33 @@ def scan_project(session: Session, project: Project) -> dict:
     from .repo_scanner import (
         ScanError,
         ensure_scan_path,
+        is_git_repo,
         remote_url,
         scan_repo,
     )
 
     path = ensure_scan_path(project.repo_path)
     tz = current_tz(session)
+    if not is_git_repo(path):
+        snapshot = {
+            "state": "no_git",
+            "error": None,
+            "branch": None,
+            "upstream": None,
+            "ahead": None,
+            "behind": None,
+            "dirty_files": None,
+            "staged_files": None,
+            "untracked_files": None,
+            "last_commit_at": None,
+            "last_commit_subject": None,
+        }
+        row = record_snapshot(session, project, snapshot)
+        return {
+            "snapshot": snapshot_out(row, tz),
+            "health": project_health(session, project, tz),
+        }
+
     try:
         snapshot = scan_repo(path)
     except ScanError as exc:

@@ -599,13 +599,18 @@ export function ProjectDetail() {
         {!snapshot ? (
           <EmptyState
             title="尚未扫描仓库"
-            description="关联本地 Git 仓库路径后触发扫描，只执行只读 Git 命令。"
+            description="关联本地目录后触发扫描；没有 Git 的目录也能扫描，只是不会有版本控制信息。"
           />
         ) : (
           <div className="space-y-3">
             {snapshot.state !== 'ok' && snapshot.error ? (
               <p className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">
                 扫描状态异常：{snapshot.error}
+              </p>
+            ) : null}
+            {snapshot.state === 'no_git' ? (
+              <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+                该目录未纳入 Git 版本管理：项目照常管理，但不会有分支、未提交和推送信息。
               </p>
             ) : null}
             <dl className="grid grid-cols-2 gap-3 text-sm md:grid-cols-3">
