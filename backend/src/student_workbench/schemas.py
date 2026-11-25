@@ -201,6 +201,8 @@ class RepoSnapshotOut(BaseModel):
     scanned_at: str | None
     state: str
     error: str | None
+    github: dict | None = None
+    github_error: str | None = None
 
 
 class ProjectOut(BaseModel):

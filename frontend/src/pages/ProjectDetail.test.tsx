@@ -124,6 +124,8 @@ describe('ProjectDetail 项目详情', () => {
           scanned_at: '2026-11-22T10:00:00+08:00',
           state: 'ok',
           error: null,
+          github: null,
+          github_error: null,
         },
       }),
     )

@@ -28,6 +28,7 @@ class HealthInputs:
     stale_hours: int
     inactive_days: int
     tz: ZoneInfo
+    github: Mapping[str, Any] | None = None
 
 
 def _reason(code: str, label: str, detail: str | None, action: str | None) -> dict:
@@ -132,6 +133,38 @@ def compute_health(inputs: HealthInputs) -> dict:
                             "repo",
                         )
                     )
+
+    github = inputs.github
+    if github is not None:
+        if github.get("state") != "ok":
+            unknown.append(
+                _reason(
+                    "GITHUB_UNREACHABLE",
+                    "GitHub 状态不可用",
+                    github.get("error") or "远端信息读取失败",
+                    "github",
+                )
+            )
+        else:
+            if github.get("ci_status") == "failure":
+                red.append(
+                    _reason(
+                        "CI_FAILING",
+                        "CI 最近一次失败",
+                        github.get("ci_name") or "默认分支的最新工作流",
+                        "github",
+                    )
+                )
+            stale_days = github.get("oldest_pull_days")
+            if stale_days is not None and stale_days >= 7:
+                yellow.append(
+                    _reason(
+                        "STALE_PULL_REQUEST",
+                        "PR 长期未合并",
+                        f"最老 {stale_days} 天，共 {github.get('open_pulls', 0)} 个开放 PR",
+                        "github",
+                    )
+                )
 
     if inputs.status in ("planning", "in_progress") and not (
         inputs.next_action or ""

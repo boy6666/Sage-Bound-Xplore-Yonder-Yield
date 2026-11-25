@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -72,6 +73,8 @@ def snapshot_out(row: RepoSnapshot, tz: ZoneInfo) -> dict:
         "scanned_at": iso(row.scanned_at, tz),
         "state": row.state,
         "error": row.error,
+        "github": json.loads(row.github_json) if row.github_json else None,
+        "github_error": row.github_error,
     }
 
 
@@ -95,6 +98,15 @@ def _health_inputs(
             "behind": snapshot_row.behind,
             "scanned_at": ensure_utc(snapshot_row.scanned_at),
         }
+    github = None
+    if snapshot_row is not None:
+        if snapshot_row.github_json:
+            try:
+                github = json.loads(snapshot_row.github_json)
+            except ValueError:
+                github = None
+        elif snapshot_row.github_error:
+            github = {"state": "error", "error": snapshot_row.github_error}
     return HealthInputs(
         status=project.status,
         status_reason=project.status_reason,
@@ -108,6 +120,7 @@ def _health_inputs(
         ),
         repo_path=project.repo_path,
         snapshot=snapshot,
+        github=github,
         now=now,
         today=local_today(tz),
         stale_hours=settings_row.stale_snapshot_hours,
@@ -367,6 +380,8 @@ def record_snapshot(
     project: Project,
     snapshot: dict,
     error: str | None = None,
+    github: dict | None = None,
+    github_error: str | None = None,
 ) -> RepoSnapshot:
     row = RepoSnapshot(
         project_id=project.id,
@@ -381,6 +396,8 @@ def record_snapshot(
         untracked_files=snapshot.get("untracked_files"),
         last_commit_at=ensure_utc(snapshot.get("last_commit_at")),
         last_commit_subject=snapshot.get("last_commit_subject"),
+        github_json=json.dumps(github, ensure_ascii=False) if github else None,
+        github_error=github_error,
         scanned_at=utcnow(),
     )
     session.add(row)
@@ -389,13 +406,22 @@ def record_snapshot(
 
 
 def scan_project(session: Session, project: Project) -> dict:
+    import httpx
+
+    from ..adapters.github_api import fetch_github_state, parse_github_remote
+    from . import credentials
     from .settings import current_tz
 
     if not project.repo_path:
         raise AppError(
             "REPO_PATH_INVALID", "项目未关联仓库路径", 422, {"project_id": project.id}
         )
-    from .repo_scanner import ScanError, ensure_scan_path, scan_repo
+    from .repo_scanner import (
+        ScanError,
+        ensure_scan_path,
+        remote_url,
+        scan_repo,
+    )
 
     path = ensure_scan_path(project.repo_path)
     tz = current_tz(session)
@@ -417,7 +443,28 @@ def scan_project(session: Session, project: Project) -> dict:
         }
         row = record_snapshot(session, project, snapshot, error=str(exc))
     else:
-        row = record_snapshot(session, project, snapshot)
+        github = None
+        github_error = None
+        parsed = parse_github_remote(remote_url(path))
+        if parsed is not None:
+            token = credentials.load_github_token()
+            try:
+                github = fetch_github_state(parsed[0], parsed[1], token)
+            except httpx.HTTPStatusError as exc:
+                status = exc.response.status_code
+                if status == 401:
+                    github_error = "GitHub 令牌无效或已过期"
+                elif status == 403:
+                    github_error = "GitHub 拒绝访问：令牌权限不足或触发速率限制"
+                elif status == 404:
+                    github_error = "仓库不存在，或令牌无权访问该私有仓库"
+                else:
+                    github_error = f"GitHub 请求失败（HTTP {status}）"
+            except Exception as exc:  # noqa: BLE001 - remote failure is partial
+                github_error = f"GitHub 请求失败：{exc}"
+        row = record_snapshot(
+            session, project, snapshot, github=github, github_error=github_error
+        )
     return {
         "snapshot": snapshot_out(row, tz),
         "health": project_health(session, project, tz),

@@ -97,6 +97,22 @@ export interface StatusHistoryEntry {
   changed_at: string
 }
 
+export interface GithubState {
+  state: 'ok' | 'error' | string
+  error: string | null
+  owner?: string
+  repo?: string
+  private?: boolean
+  default_branch?: string | null
+  open_issues?: number
+  open_pulls?: number
+  oldest_pull_days?: number | null
+  ci_status?: 'success' | 'failure' | 'pending' | 'none' | string
+  ci_name?: string | null
+  pushed_at?: string | null
+  fetched_at?: string | null
+}
+
 export interface RepoSnapshot {
   branch: string | null
   upstream: string | null
@@ -110,6 +126,8 @@ export interface RepoSnapshot {
   scanned_at: string | null
   state: 'ok' | 'error' | string
   error: string | null
+  github: GithubState | null
+  github_error: string | null
 }
 
 export interface ProjectDetail {

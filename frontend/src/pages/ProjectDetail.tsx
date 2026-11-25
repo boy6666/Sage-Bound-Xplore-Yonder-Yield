@@ -651,6 +651,51 @@ export function ProjectDetail() {
                 </dd>
               </div>
             </dl>
+            {snapshot.github_error ? (
+              <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+                GitHub：{snapshot.github_error}
+              </p>
+            ) : snapshot.github && snapshot.github.state === 'ok' ? (
+              <div className="rounded-lg border border-edge bg-surface-2/40 p-3">
+                <p className="text-xs font-medium text-muted">GitHub</p>
+                <dl className="mt-2 grid grid-cols-2 gap-2 text-sm md:grid-cols-4">
+                  <div>
+                    <dt className="text-xs text-muted">开放 Issue</dt>
+                    <dd className="text-ink">{snapshot.github.open_issues ?? 0}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-muted">开放 PR</dt>
+                    <dd className="text-ink">
+                      {snapshot.github.open_pulls ?? 0}
+                      {snapshot.github.oldest_pull_days != null
+                        ? ` · 最老 ${snapshot.github.oldest_pull_days} 天`
+                        : ''}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-muted">CI</dt>
+                    <dd className="text-ink">
+                      {snapshot.github.ci_status === 'failure'
+                        ? '失败'
+                        : snapshot.github.ci_status === 'pending'
+                          ? '进行中'
+                          : snapshot.github.ci_status === 'success'
+                            ? '通过'
+                            : '无记录'}
+                      {snapshot.github.ci_name ? ` · ${snapshot.github.ci_name}` : ''}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-muted">最近推送</dt>
+                    <dd className="text-ink">
+                      {snapshot.github.pushed_at
+                        ? formatDateTime(snapshot.github.pushed_at)
+                        : '未知'}
+                    </dd>
+                  </div>
+                </dl>
+              </div>
+            ) : null}
             <p className="text-xs text-muted">
               ahead/behind 相对于本地已有远端引用，未自动 fetch，可能受上次 fetch 时间影响。
             </p>

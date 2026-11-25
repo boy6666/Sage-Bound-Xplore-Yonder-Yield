@@ -324,4 +324,6 @@ class RepoSnapshot(Base):
     untracked_files: Mapped[int | None] = mapped_column(Integer)
     last_commit_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_commit_subject: Mapped[str | None] = mapped_column(Text)
+    github_json: Mapped[str | None] = mapped_column(Text)
+    github_error: Mapped[str | None] = mapped_column(Text)
     scanned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

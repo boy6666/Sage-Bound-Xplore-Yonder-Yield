@@ -113,6 +113,15 @@ Cookie 保存在应用数据目录 `cookies/academic_portal_v1.json`，不进入
 - **截止时间不在这个页面里**，导入后为空，需要在收件箱里手动填写。
 - 课程按 `courseId` 建立身份，名称与教务课程一致时自动关联（`auto_exact`）。
 
+## GitHub 远端
+
+项目详情页的「触发扫描」在本地 Git 之外，还会读取 GitHub 的开放 Issue、开放 PR 和最近一次 CI。
+
+- 仓库地址从本地 `origin` 自动识别，仅支持 `github.com`（HTTPS 与 SSH 均可）。
+- 私有仓库需要令牌：设置 → GitHub 访问令牌。令牌写入当前 OS 账户的系统凭据库，不回显、不入库、不进日志。
+- 每次扫描会向 GitHub 发 4 个只读请求（仓库信息、PR、Issue、workflow runs）。
+- 未配置令牌时只能读公开仓库；读不到不会影响本地扫描结果，只显示“GitHub 状态不可用”。
+
 运行期数据统一放在仓库下的 `data/`（已被 `.gitignore` 忽略）：
 
 ```text

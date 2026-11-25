@@ -22,6 +22,10 @@ _ADDED_COLUMNS: dict[str, dict[str, str]] = {
         "portal_week": "INTEGER",
         "portal_week_checked_on": "DATE",
     },
+    "repo_snapshots": {
+        "github_json": "TEXT",
+        "github_error": "TEXT",
+    },
 }
 
 

@@ -82,6 +82,14 @@ def ensure_scan_path(path: str) -> Path:
     return _repo_path(path)
 
 
+def remote_url(path: Path) -> str | None:
+    try:
+        value = _run(path, ["remote", "get-url", "origin"]).strip()
+    except ScanError:
+        return None
+    return value or None
+
+
 def scan_repo(path: Path) -> dict:
     branch: str | None = None
     try:
